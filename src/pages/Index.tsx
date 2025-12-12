@@ -1,8 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { Play, Trophy, Calendar, Users, Zap } from 'lucide-react';
+import { Play, Trophy, Calendar, Users, Zap, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Header } from '@/components/Header';
+import { TippKickBall } from '@/components/TippKickBall';
+import tkc71Logo from '@/assets/tkc71-logo.jpeg';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -15,13 +17,13 @@ const Index = () => {
     },
     {
       icon: Zap,
-      title: "Auto-Paarungen",
-      description: "Faire, zufällige Spielpaarungen generieren"
+      title: "Round-Robin",
+      description: "Faire Rundenplanung - jeder gegen jeden"
     },
     {
       icon: Calendar,
       title: "Live-Tabelle",
-      description: "Echtzeit-Aktualisierung der Ergebnisse"
+      description: "Echtzeit-Aktualisierung mit Meisterschafts-Tracking"
     },
     {
       icon: Trophy,
@@ -37,20 +39,27 @@ const Index = () => {
       <main className="container mx-auto px-4 py-8 md:py-16">
         {/* Hero Section */}
         <section className="text-center mb-16 animate-fade-in">
-          <div className="mb-6">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-primary shadow-glow animate-pulse-glow mb-6">
-              <span className="text-4xl">⚽</span>
-            </div>
+          <div className="mb-6 flex justify-center items-center gap-4">
+            <TippKickBall size="xl" animated />
+            <img 
+              src={tkc71Logo} 
+              alt="TKC71 Hirschlanden" 
+              className="w-20 h-20 rounded-full object-cover shadow-lg border-4 border-accent"
+            />
           </div>
           
-          <h1 className="font-display text-4xl md:text-6xl tracking-wide mb-4">
-            KICKER{' '}
-            <span className="text-gradient-primary">TRAINER</span>
+          <h1 className="font-display text-3xl md:text-5xl lg:text-6xl tracking-wide mb-4">
+            TIPP-KICK{' '}
+            <span className="text-gradient-hero">MEISTERSCHAFTSTOOL</span>
           </h1>
           
-          <p className="text-muted-foreground text-lg md:text-xl max-w-2xl mx-auto mb-8">
-            Verwalte deine Tischfußball-Trainingsabende, generiere faire Paarungen 
-            und führe Jahresligen mit automatischer Punkteberechnung.
+          <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto mb-2">
+            TKC71 Hirschlanden
+          </p>
+          
+          <p className="text-muted-foreground text-sm md:text-base max-w-2xl mx-auto mb-8">
+            Verwalte deine Tipp-Kick-Trainingsabende, generiere faire Paarungen 
+            und führe Jahresligen mit automatischer Meisterschafts-Zählung.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -72,6 +81,15 @@ const Index = () => {
               <Trophy className="w-5 h-5" />
               Ligen ansehen
             </Button>
+            <Button
+              variant="ghost"
+              size="xl"
+              onClick={() => navigate('/history')}
+              className="gap-2"
+            >
+              <History className="w-5 h-5" />
+              Historie
+            </Button>
           </div>
         </section>
 
@@ -80,7 +98,7 @@ const Index = () => {
           {features.map((feature, index) => (
             <Card
               key={feature.title}
-              className="group hover:border-primary/50 hover:shadow-glow transition-all duration-300 animate-slide-up"
+              className="group hover:border-primary/50 hover:shadow-glow transition-all duration-300 animate-slide-up bg-gradient-card"
               style={{ animationDelay: `${index * 100}ms` }}
             >
               <CardContent className="p-6 text-center">

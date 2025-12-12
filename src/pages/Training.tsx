@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Player, TrainingSession, Match, League } from '@/types';
+import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { generatePairings, calculatePlayerStats } from '@/lib/pairingGenerator';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 import {
@@ -27,6 +27,7 @@ import {
   saveSessions,
   loadLeagues,
   saveLeagues,
+  saveToHistory,
 } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 
@@ -92,7 +93,10 @@ const Training = () => {
 
     setSession(newSession);
     setExpandedRounds([1]);
-    toast.success(`${matches.length} Spiele in ${roundCount} Runden generiert`);
+    
+    // Calculate max rounds info
+    const maxRounds = players.length - 1;
+    toast.success(`${matches.length} Spiele in ${roundCount} Runden generiert (Round-Robin: max ${maxRounds} Runden pro Durchgang)`);
   };
 
   const handleUpdateScore = (matchId: string, homeScore: number, awayScore: number) => {
@@ -132,10 +136,14 @@ const Training = () => {
     setShowTransferDialog(true);
   };
 
-  const handleTransferResults = (leagueIds: string[]) => {
+  const handleTransferResults = (leagueIds: string[], nameMatches: Map<string, string>) => {
     if (!session) return;
 
     const stats = calculatePlayerStats(session.players, session.matches);
+    
+    // Find 1st and 2nd place for championship tracking
+    const firstPlace = stats[0]?.player.name;
+    const secondPlace = stats[1]?.player.name;
     
     const updatedLeagues = leagues.map(league => {
       if (!leagueIds.includes(league.id)) return league;
@@ -143,24 +151,38 @@ const Training = () => {
       const updatedStats = [...league.playerStats];
       
       stats.forEach(stat => {
+        // Check if there's a name match mapping
+        const mappedName = nameMatches.get(stat.player.name);
+        const searchName = mappedName || stat.player.name;
+        
         const existingIndex = updatedStats.findIndex(
-          s => s.player.name.toLowerCase() === stat.player.name.toLowerCase()
+          s => s.player.name.toLowerCase() === searchName.toLowerCase()
         );
 
         if (existingIndex >= 0) {
+          // Update existing player
+          const existing = updatedStats[existingIndex];
           updatedStats[existingIndex] = {
-            ...updatedStats[existingIndex],
-            wins: updatedStats[existingIndex].wins + stat.wins,
-            draws: updatedStats[existingIndex].draws + stat.draws,
-            losses: updatedStats[existingIndex].losses + stat.losses,
-            goalsFor: updatedStats[existingIndex].goalsFor + stat.goalsFor,
-            goalsAgainst: updatedStats[existingIndex].goalsAgainst + stat.goalsAgainst,
-            points: updatedStats[existingIndex].points + stat.points,
-            pointsAgainst: updatedStats[existingIndex].pointsAgainst + stat.pointsAgainst,
-            goalDifference: updatedStats[existingIndex].goalDifference + stat.goalDifference,
+            ...existing,
+            wins: existing.wins + stat.wins,
+            draws: existing.draws + stat.draws,
+            losses: existing.losses + stat.losses,
+            goalsFor: existing.goalsFor + stat.goalsFor,
+            goalsAgainst: existing.goalsAgainst + stat.goalsAgainst,
+            points: existing.points + stat.points,
+            pointsAgainst: existing.pointsAgainst + stat.pointsAgainst,
+            goalDifference: existing.goalDifference + stat.goalDifference,
+            // Update championships
+            championships: (existing.championships || 0) + (stat.player.name === firstPlace ? 1 : 0),
+            viceChampionships: (existing.viceChampionships || 0) + (stat.player.name === secondPlace ? 1 : 0),
           };
         } else {
-          updatedStats.push({ ...stat });
+          // Add new player
+          updatedStats.push({
+            ...stat,
+            championships: stat.player.name === firstPlace ? 1 : 0,
+            viceChampionships: stat.player.name === secondPlace ? 1 : 0,
+          });
         }
       });
 
@@ -177,8 +199,17 @@ const Training = () => {
     setLeagues(updatedLeagues);
     saveLeagues(updatedLeagues);
 
-    // Save completed session
-    const completedSession = { ...session, isCompleted: true };
+    // Save completed session with transferred leagues info
+    const completedSession: TrainingSession = { 
+      ...session, 
+      isCompleted: true,
+      transferredToLeagues: leagueIds,
+    };
+    
+    // Save to history
+    saveToHistory(completedSession);
+    
+    // Also save to sessions for backward compatibility
     const sessions = loadSessions();
     saveSessions([...sessions, completedSession]);
     
@@ -288,7 +319,7 @@ const Training = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="matchesPerPairing">Spiele pro Paarung</Label>
+                  <Label htmlFor="matchesPerPairing">Spiele pro Paarung (Durchgänge)</Label>
                   <Input
                     id="matchesPerPairing"
                     type="number"
@@ -299,7 +330,7 @@ const Training = () => {
                     className="mt-1 w-24"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Bei 2: Hin- und Rückrunde
+                    Round-Robin: Jeder gegen jeden. Bei {players.length} Spielern = {Math.max(0, players.length - 1)} Runden pro Durchgang.
                   </p>
                 </div>
               </CardContent>
@@ -392,6 +423,7 @@ const Training = () => {
         open={showTransferDialog}
         onClose={() => setShowTransferDialog(false)}
         leagues={leagues}
+        stats={stats}
         onTransfer={handleTransferResults}
         onCreateLeague={handleCreateLeague}
       />

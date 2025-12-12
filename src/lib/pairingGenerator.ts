@@ -14,6 +14,8 @@ function getMatchesPerRound(playerCount: number): number {
   return Math.floor(playerCount / 2);
 }
 
+// Round-Robin algorithm: generates pairings where each player plays against each other
+// Maximum rounds = players - 1 (or players if odd, since one pauses each round)
 export function generatePairings(
   players: Player[],
   matchesPerPairing: number = 1
@@ -22,80 +24,60 @@ export function generatePairings(
     return { matches: [], roundCount: 0 };
   }
 
+  const n = players.length;
+  const isOdd = n % 2 === 1;
+  
+  // For round-robin: add a "bye" player if odd number
+  const allPlayers = isOdd ? [...players, { id: 'BYE', name: 'BYE' }] : [...players];
+  const numPlayers = allPlayers.length;
+  const numRounds = numPlayers - 1; // Maximum rounds for round-robin
+  
   const matches: Match[] = [];
-  const pairings: { home: Player; away: Player }[] = [];
-
-  // Generate all unique pairings
-  for (let i = 0; i < players.length; i++) {
-    for (let j = i + 1; j < players.length; j++) {
-      // Randomly assign home/away
-      if (Math.random() > 0.5) {
-        pairings.push({ home: players[i], away: players[j] });
-      } else {
-        pairings.push({ home: players[j], away: players[i] });
-      }
-    }
-  }
-
-  // Duplicate pairings for multiple matches and swap home/away alternately
-  const allPairings: { home: Player; away: Player }[] = [];
-  for (let m = 0; m < matchesPerPairing; m++) {
-    pairings.forEach(p => {
-      if (m % 2 === 0) {
-        allPairings.push(p);
-      } else {
-        allPairings.push({ home: p.away, away: p.home });
-      }
-    });
-  }
-
-  // Shuffle all pairings
-  const shuffledPairings = shuffleArray(allPairings);
-
-  // Group into rounds (each player plays max once per round)
-  // For odd player counts: one player sits out per round
-  const matchesPerRound = getMatchesPerRound(players.length);
-  const rounds: { home: Player; away: Player }[][] = [];
-  const usedPairings = new Set<number>();
-
-  while (usedPairings.size < shuffledPairings.length) {
-    const round: { home: Player; away: Player }[] = [];
-    const playersInRound = new Set<string>();
-
-    // Try to fill round with maximum matches
-    shuffledPairings.forEach((pairing, index) => {
-      if (usedPairings.has(index)) return;
-      if (round.length >= matchesPerRound) return;
+  const matchId = () => crypto.randomUUID();
+  
+  // Circle method for round-robin scheduling
+  const fixed = allPlayers[0];
+  const rotating = allPlayers.slice(1);
+  
+  for (let repetition = 0; repetition < matchesPerPairing; repetition++) {
+    const rotatingCopy = [...rotating];
+    
+    for (let round = 0; round < numRounds; round++) {
+      const roundNumber = repetition * numRounds + round + 1;
+      const roundPlayers = [fixed, ...rotatingCopy];
       
-      if (!playersInRound.has(pairing.home.id) && !playersInRound.has(pairing.away.id)) {
-        round.push(pairing);
-        playersInRound.add(pairing.home.id);
-        playersInRound.add(pairing.away.id);
-        usedPairings.add(index);
+      for (let i = 0; i < numPlayers / 2; i++) {
+        const home = roundPlayers[i];
+        const away = roundPlayers[numPlayers - 1 - i];
+        
+        // Skip matches involving the "bye" player
+        if (home.id === 'BYE' || away.id === 'BYE') continue;
+        
+        // Alternate home/away based on repetition
+        const finalHome = repetition % 2 === 0 ? home : away;
+        const finalAway = repetition % 2 === 0 ? away : home;
+        
+        matches.push({
+          id: matchId(),
+          round: roundNumber,
+          homePlayer: finalHome,
+          awayPlayer: finalAway,
+          homeScore: null,
+          awayScore: null,
+          isCompleted: false,
+        });
       }
-    });
-
-    if (round.length > 0) {
-      rounds.push(round);
+      
+      // Rotate players (keep first fixed, rotate the rest)
+      const last = rotatingCopy.pop()!;
+      rotatingCopy.unshift(last);
     }
   }
 
-  // Create matches from rounds
-  rounds.forEach((round, roundIndex) => {
-    round.forEach(pairing => {
-      matches.push({
-        id: crypto.randomUUID(),
-        round: roundIndex + 1,
-        homePlayer: pairing.home,
-        awayPlayer: pairing.away,
-        homeScore: null,
-        awayScore: null,
-        isCompleted: false,
-      });
-    });
-  });
+  // Calculate total rounds
+  const totalRounds = numRounds * matchesPerPairing;
 
-  return { matches, roundCount: rounds.length };
+  return { matches, roundCount: totalRounds };
 }
 
 // Calculate head-to-head result between two players
@@ -136,6 +118,8 @@ export function calculatePlayerStats(players: Player[], matches: Match[]): Playe
     points: 0,
     pointsAgainst: 0,
     goalDifference: 0,
+    championships: 0,
+    viceChampionships: 0,
   }));
 
   matches.filter(m => m.isCompleted).forEach(match => {
@@ -184,4 +168,43 @@ export function calculatePlayerStats(players: Player[], matches: Match[]): Playe
   });
 
   return stats;
+}
+
+// Calculate similarity between two strings (Levenshtein distance based)
+export function calculateSimilarity(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
+  
+  if (s1 === s2) return 1;
+  
+  const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
+  
+  if (longer.length === 0) return 1;
+  
+  const editDistance = levenshteinDistance(longer, shorter);
+  return (longer.length - editDistance) / longer.length;
+}
+
+function levenshteinDistance(s1: string, s2: string): number {
+  const costs: number[] = [];
+  
+  for (let i = 0; i <= s1.length; i++) {
+    let lastValue = i;
+    for (let j = 0; j <= s2.length; j++) {
+      if (i === 0) {
+        costs[j] = j;
+      } else if (j > 0) {
+        let newValue = costs[j - 1];
+        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+        }
+        costs[j - 1] = lastValue;
+        lastValue = newValue;
+      }
+    }
+    if (i > 0) costs[s2.length] = lastValue;
+  }
+  
+  return costs[s2.length];
 }
