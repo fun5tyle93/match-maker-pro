@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Swords } from 'lucide-react';
+import { Check, Swords, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Match } from '@/types';
@@ -13,6 +13,7 @@ interface MatchCardProps {
 export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
   const [homeScore, setHomeScore] = useState<string>(match.homeScore?.toString() ?? '');
   const [awayScore, setAwayScore] = useState<string>(match.awayScore?.toString() ?? '');
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     setHomeScore(match.homeScore?.toString() ?? '');
@@ -24,7 +25,18 @@ export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
     const away = parseInt(awayScore);
     if (!isNaN(home) && !isNaN(away) && home >= 0 && away >= 0) {
       onUpdateScore(match.id, home, away);
+      setIsEditing(false);
     }
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    setHomeScore(match.homeScore?.toString() ?? '');
+    setAwayScore(match.awayScore?.toString() ?? '');
+    setIsEditing(false);
   };
 
   const isValid = homeScore !== '' && awayScore !== '' && 
@@ -38,11 +50,13 @@ export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
     return 'border-l-4 border-l-accent border-r-4 border-r-accent';
   };
 
+  const showInputs = !match.isCompleted || isEditing;
+
   return (
     <div
       className={cn(
         "bg-card rounded-lg border border-border p-4 transition-all duration-300",
-        match.isCompleted ? "opacity-80" : "hover:border-primary/50 hover:shadow-glow",
+        match.isCompleted && !isEditing ? "opacity-80" : "hover:border-primary/50 hover:shadow-glow",
         getResultColor()
       )}
     >
@@ -68,7 +82,7 @@ export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
             value={homeScore}
             onChange={(e) => setHomeScore(e.target.value)}
             className="w-14 h-12 text-center text-xl font-bold"
-            disabled={match.isCompleted}
+            disabled={!showInputs}
           />
           <Swords className="w-5 h-5 text-muted-foreground" />
           <Input
@@ -78,7 +92,7 @@ export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
             value={awayScore}
             onChange={(e) => setAwayScore(e.target.value)}
             className="w-14 h-12 text-center text-xl font-bold"
-            disabled={match.isCompleted}
+            disabled={!showInputs}
           />
         </div>
 
@@ -95,8 +109,8 @@ export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
         </div>
       </div>
 
-      {!match.isCompleted && (
-        <div className="mt-3 flex justify-center">
+      {showInputs && (
+        <div className="mt-3 flex justify-center gap-2">
           <Button
             size="sm"
             onClick={handleSave}
@@ -105,6 +119,29 @@ export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
           >
             <Check className="w-4 h-4" />
             Speichern
+          </Button>
+          {isEditing && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCancel}
+            >
+              Abbrechen
+            </Button>
+          )}
+        </div>
+      )}
+
+      {match.isCompleted && !isEditing && (
+        <div className="mt-3 flex justify-center">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleEdit}
+            className="gap-1 text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="w-4 h-4" />
+            Bearbeiten
           </Button>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trophy, Trash2, Calendar } from 'lucide-react';
+import { Plus, Trophy, Trash2, Calendar, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { StandingsTable } from '@/components/StandingsTable';
@@ -17,8 +17,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { League } from '@/types';
 import { loadLeagues, saveLeagues } from '@/lib/storage';
+import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 
 const Leagues = () => {
@@ -177,30 +184,55 @@ const Leagues = () => {
                           Erstellt am {formatDate(selectedLeague.createdAt)}
                         </p>
                       </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="icon">
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Liga löschen?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Diese Aktion kann nicht rückgängig gemacht werden. Alle Daten der Liga "{selectedLeague.name}" werden unwiderruflich gelöscht.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteLeague(selectedLeague.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Löschen
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <div className="flex items-center gap-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon">
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => {
+                              exportLeagueToXLSX(selectedLeague);
+                              toast.success('XLSX exportiert');
+                            }}>
+                              <FileSpreadsheet className="w-4 h-4 mr-2" />
+                              Als XLSX
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              exportLeagueToPDF(selectedLeague);
+                              toast.success('PDF exportiert');
+                            }}>
+                              <FileText className="w-4 h-4 mr-2" />
+                              Als PDF
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="icon">
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Liga löschen?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Diese Aktion kann nicht rückgängig gemacht werden. Alle Daten der Liga "{selectedLeague.name}" werden unwiderruflich gelöscht.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteLeague(selectedLeague.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Löschen
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
                   </CardHeader>
                 </Card>
