@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils';
 interface MatchCardProps {
   match: Match;
   onUpdateScore: (matchId: string, homeScore: number, awayScore: number) => void;
+  readonly?: boolean;
 }
 
-export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
+export function MatchCard({ match, onUpdateScore, readonly = false }: MatchCardProps) {
   const [homeScore, setHomeScore] = useState<string>(match.homeScore?.toString() ?? '');
   const [awayScore, setAwayScore] = useState<string>(match.awayScore?.toString() ?? '');
   const [isEditing, setIsEditing] = useState(false);
@@ -50,7 +51,7 @@ export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
     return 'border-l-4 border-l-accent border-r-4 border-r-accent';
   };
 
-  const showInputs = !match.isCompleted || isEditing;
+  const showInputs = !readonly && (!match.isCompleted || isEditing);
 
   return (
     <div
@@ -73,27 +74,41 @@ export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
           <span className="text-xs text-muted-foreground">Heim</span>
         </div>
 
-        {/* Score Input */}
+        {/* Score Display/Input */}
         <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min="0"
-            inputMode="numeric"
-            value={homeScore}
-            onChange={(e) => setHomeScore(e.target.value)}
-            className="w-14 h-12 text-center text-xl font-bold"
-            disabled={!showInputs}
-          />
-          <Swords className="w-5 h-5 text-muted-foreground" />
-          <Input
-            type="number"
-            min="0"
-            inputMode="numeric"
-            value={awayScore}
-            onChange={(e) => setAwayScore(e.target.value)}
-            className="w-14 h-12 text-center text-xl font-bold"
-            disabled={!showInputs}
-          />
+          {readonly ? (
+            <>
+              <span className="w-14 h-12 flex items-center justify-center text-xl font-bold">
+                {match.homeScore ?? '-'}
+              </span>
+              <Swords className="w-5 h-5 text-muted-foreground" />
+              <span className="w-14 h-12 flex items-center justify-center text-xl font-bold">
+                {match.awayScore ?? '-'}
+              </span>
+            </>
+          ) : (
+            <>
+              <Input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                value={homeScore}
+                onChange={(e) => setHomeScore(e.target.value)}
+                className="w-14 h-12 text-center text-xl font-bold"
+                disabled={!showInputs}
+              />
+              <Swords className="w-5 h-5 text-muted-foreground" />
+              <Input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                value={awayScore}
+                onChange={(e) => setAwayScore(e.target.value)}
+                className="w-14 h-12 text-center text-xl font-bold"
+                disabled={!showInputs}
+              />
+            </>
+          )}
         </div>
 
         {/* Away Player */}
@@ -132,7 +147,7 @@ export function MatchCard({ match, onUpdateScore }: MatchCardProps) {
         </div>
       )}
 
-      {match.isCompleted && !isEditing && (
+      {!readonly && match.isCompleted && !isEditing && (
         <div className="mt-3 flex justify-center">
           <Button
             size="sm"

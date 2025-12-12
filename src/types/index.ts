@@ -23,6 +23,8 @@ export interface PlayerStats {
   points: number;
   pointsAgainst: number;
   goalDifference: number;
+  championships?: number;
+  viceChampionships?: number;
 }
 
 export interface TrainingSession {
@@ -33,6 +35,7 @@ export interface TrainingSession {
   isCompleted: boolean;
   roundCount: number;
   matchesPerPairing: number;
+  transferredToLeagues?: string[];
 }
 
 export interface League {
@@ -41,4 +44,21 @@ export interface League {
   year: number;
   playerStats: PlayerStats[];
   createdAt: string;
+}
+
+export interface NameMatch {
+  originalName: string;
+  matchedName: string;
+  similarity: number;
+  isExact: boolean;
+}
+
+export interface ChangeLogEntry {
+  id: string;
+  timestamp: string;
+  action: 'add' | 'edit' | 'delete';
+  playerName: string;
+  field?: string;
+  oldValue?: string | number;
+  newValue?: string | number;
 }

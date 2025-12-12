@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trophy, Trash2, Calendar, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Plus, Trophy, Trash2, Calendar, Download, FileSpreadsheet, FileText, Pencil, Save, X, UserPlus, Medal, Award } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from '@/components/Header';
-import { StandingsTable } from '@/components/StandingsTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,7 +22,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { League } from '@/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { League, PlayerStats, Player } from '@/types';
 import { loadLeagues, saveLeagues } from '@/lib/storage';
 import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
@@ -33,6 +40,19 @@ const Leagues = () => {
   const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [newLeagueName, setNewLeagueName] = useState('');
   const [showNewLeague, setShowNewLeague] = useState(false);
+  const [editingPlayer, setEditingPlayer] = useState<PlayerStats | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showAddPlayer, setShowAddPlayer] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState('');
+
+  // Edit form state
+  const [editWins, setEditWins] = useState(0);
+  const [editDraws, setEditDraws] = useState(0);
+  const [editLosses, setEditLosses] = useState(0);
+  const [editGoalsFor, setEditGoalsFor] = useState(0);
+  const [editGoalsAgainst, setEditGoalsAgainst] = useState(0);
+  const [editChampionships, setEditChampionships] = useState(0);
+  const [editViceChampionships, setEditViceChampionships] = useState(0);
 
   useEffect(() => {
     const loaded = loadLeagues();
@@ -74,12 +94,126 @@ const Leagues = () => {
     toast.success('Liga gelöscht');
   };
 
+  const handleEditPlayer = (stat: PlayerStats) => {
+    setEditingPlayer(stat);
+    setEditWins(stat.wins);
+    setEditDraws(stat.draws);
+    setEditLosses(stat.losses);
+    setEditGoalsFor(stat.goalsFor);
+    setEditGoalsAgainst(stat.goalsAgainst);
+    setEditChampionships(stat.championships || 0);
+    setEditViceChampionships(stat.viceChampionships || 0);
+    setShowEditDialog(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedLeague || !editingPlayer) return;
+
+    const updatedStats = selectedLeague.playerStats.map(s => {
+      if (s.player.id === editingPlayer.player.id) {
+        const points = editWins * 2 + editDraws;
+        const pointsAgainst = editLosses * 2 + editDraws;
+        return {
+          ...s,
+          wins: editWins,
+          draws: editDraws,
+          losses: editLosses,
+          goalsFor: editGoalsFor,
+          goalsAgainst: editGoalsAgainst,
+          points,
+          pointsAgainst,
+          goalDifference: editGoalsFor - editGoalsAgainst,
+          championships: editChampionships,
+          viceChampionships: editViceChampionships,
+        };
+      }
+      return s;
+    });
+
+    // Re-sort standings
+    updatedStats.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+      return b.goalsFor - a.goalsFor;
+    });
+
+    const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
+    const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
+    
+    setLeagues(updatedLeagues);
+    saveLeagues(updatedLeagues);
+    setSelectedLeague(updatedLeague);
+    setShowEditDialog(false);
+    toast.success('Spieler aktualisiert');
+  };
+
+  const handleDeletePlayer = (playerId: string) => {
+    if (!selectedLeague) return;
+
+    const updatedStats = selectedLeague.playerStats.filter(s => s.player.id !== playerId);
+    const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
+    const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
+    
+    setLeagues(updatedLeagues);
+    saveLeagues(updatedLeagues);
+    setSelectedLeague(updatedLeague);
+    toast.success('Spieler entfernt');
+  };
+
+  const handleAddPlayer = () => {
+    if (!selectedLeague || !newPlayerName.trim()) return;
+
+    const newPlayer: Player = {
+      id: crypto.randomUUID(),
+      name: newPlayerName.trim(),
+    };
+
+    const newStat: PlayerStats = {
+      player: newPlayer,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      goalsFor: 0,
+      goalsAgainst: 0,
+      points: 0,
+      pointsAgainst: 0,
+      goalDifference: 0,
+      championships: 0,
+      viceChampionships: 0,
+    };
+
+    const updatedStats = [...selectedLeague.playerStats, newStat];
+    const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
+    const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
+    
+    setLeagues(updatedLeagues);
+    saveLeagues(updatedLeagues);
+    setSelectedLeague(updatedLeague);
+    setNewPlayerName('');
+    setShowAddPlayer(false);
+    toast.success(`Spieler "${newPlayer.name}" hinzugefügt`);
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('de-DE', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
+  };
+
+  const getRankColor = (rank: number) => {
+    if (rank === 1) return "text-gold";
+    if (rank === 2) return "text-silver";
+    if (rank === 3) return "text-bronze";
+    return "text-muted-foreground";
+  };
+
+  const getRankBg = (rank: number) => {
+    if (rank === 1) return "bg-gold/10 border-gold/30";
+    if (rank === 2) return "bg-silver/10 border-silver/30";
+    if (rank === 3) return "bg-bronze/10 border-bronze/30";
+    return "";
   };
 
   return (
@@ -185,6 +319,14 @@ const Leagues = () => {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAddPlayer(true)}
+                        >
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Spieler
+                        </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="icon">
@@ -237,10 +379,122 @@ const Leagues = () => {
                   </CardHeader>
                 </Card>
 
-                <StandingsTable
-                  stats={selectedLeague.playerStats}
-                  title={`Gesamttabelle ${selectedLeague.name}`}
-                />
+                {/* Enhanced Standings Table */}
+                <Card className="animate-fade-in">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Trophy className="w-5 h-5 text-accent" />
+                      Gesamttabelle {selectedLeague.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {selectedLeague.playerStats.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-4">
+                        Noch keine Spieler vorhanden
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
+                              <th className="text-left py-3 px-2">#</th>
+                              <th className="text-left py-3 px-2">Spieler</th>
+                              <th className="text-center py-3 px-2">Pkt</th>
+                              <th className="text-center py-3 px-2">Tore</th>
+                              <th className="text-center py-3 px-2">Diff</th>
+                              <th className="text-center py-3 px-2" title="Meisterschaften">
+                                <Medal className="w-4 h-4 inline text-gold" />
+                              </th>
+                              <th className="text-center py-3 px-2" title="Vizemeisterschaften">
+                                <Award className="w-4 h-4 inline text-silver" />
+                              </th>
+                              <th className="text-right py-3 px-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedLeague.playerStats.map((stat, index) => (
+                              <tr
+                                key={stat.player.id}
+                                className={cn(
+                                  "border-b border-border/50 transition-colors hover:bg-secondary/50",
+                                  getRankBg(index + 1),
+                                  "animate-slide-up"
+                                )}
+                                style={{ animationDelay: `${index * 50}ms` }}
+                              >
+                                <td className={cn("py-3 px-2 font-display text-lg", getRankColor(index + 1))}>
+                                  {index + 1}
+                                </td>
+                                <td className="py-3 px-2">
+                                  <span className="font-semibold">{stat.player.name}</span>
+                                </td>
+                                <td className="py-3 px-2 text-center">
+                                  <span className="font-mono font-bold text-primary">{stat.points}</span>
+                                  <span className="text-muted-foreground">:</span>
+                                  <span className="font-mono text-muted-foreground">{stat.pointsAgainst}</span>
+                                </td>
+                                <td className="py-3 px-2 text-center font-mono">
+                                  <span className="text-foreground">{stat.goalsFor}</span>
+                                  <span className="text-muted-foreground">:</span>
+                                  <span className="text-muted-foreground">{stat.goalsAgainst}</span>
+                                </td>
+                                <td className={cn(
+                                  "py-3 px-2 text-center font-mono font-bold",
+                                  stat.goalDifference > 0 && "text-primary",
+                                  stat.goalDifference < 0 && "text-destructive",
+                                  stat.goalDifference === 0 && "text-muted-foreground"
+                                )}>
+                                  {stat.goalDifference > 0 ? '+' : ''}{stat.goalDifference}
+                                </td>
+                                <td className="py-3 px-2 text-center font-mono font-bold text-gold">
+                                  {stat.championships || 0}
+                                </td>
+                                <td className="py-3 px-2 text-center font-mono font-bold text-silver">
+                                  {stat.viceChampionships || 0}
+                                </td>
+                                <td className="py-3 px-2 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditPlayer(stat)}
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="sm">
+                                          <Trash2 className="w-4 h-4 text-destructive" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Spieler entfernen?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            "{stat.player.name}" wird aus der Liga entfernt.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => handleDeletePlayer(stat.player.id)}
+                                            className="bg-destructive text-destructive-foreground"
+                                          >
+                                            Entfernen
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             ) : (
               <Card className="animate-fade-in">
@@ -255,6 +509,134 @@ const Leagues = () => {
           </div>
         </div>
       </main>
+
+      {/* Edit Player Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Spieler bearbeiten: {editingPlayer?.player.name}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="wins">Siege</Label>
+                <Input
+                  id="wins"
+                  type="number"
+                  min="0"
+                  value={editWins}
+                  onChange={(e) => setEditWins(parseInt(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="draws">Unentschieden</Label>
+                <Input
+                  id="draws"
+                  type="number"
+                  min="0"
+                  value={editDraws}
+                  onChange={(e) => setEditDraws(parseInt(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="losses">Niederlagen</Label>
+                <Input
+                  id="losses"
+                  type="number"
+                  min="0"
+                  value={editLosses}
+                  onChange={(e) => setEditLosses(parseInt(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="goalsFor">Tore geschossen</Label>
+                <Input
+                  id="goalsFor"
+                  type="number"
+                  min="0"
+                  value={editGoalsFor}
+                  onChange={(e) => setEditGoalsFor(parseInt(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="goalsAgainst">Tore erhalten</Label>
+                <Input
+                  id="goalsAgainst"
+                  type="number"
+                  min="0"
+                  value={editGoalsAgainst}
+                  onChange={(e) => setEditGoalsAgainst(parseInt(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="championships" className="flex items-center gap-1">
+                  <Medal className="w-4 h-4 text-gold" /> Meisterschaften
+                </Label>
+                <Input
+                  id="championships"
+                  type="number"
+                  min="0"
+                  value={editChampionships}
+                  onChange={(e) => setEditChampionships(parseInt(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="viceChampionships" className="flex items-center gap-1">
+                  <Award className="w-4 h-4 text-silver" /> Vizemeisterschaften
+                </Label>
+                <Input
+                  id="viceChampionships"
+                  type="number"
+                  min="0"
+                  value={editViceChampionships}
+                  onChange={(e) => setEditViceChampionships(parseInt(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleSaveEdit}>
+              <Save className="w-4 h-4 mr-2" />
+              Speichern
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Player Dialog */}
+      <Dialog open={showAddPlayer} onOpenChange={setShowAddPlayer}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Spieler hinzufügen</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="playerName">Spielername</Label>
+            <Input
+              id="playerName"
+              placeholder="Name eingeben..."
+              value={newPlayerName}
+              onChange={(e) => setNewPlayerName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddPlayer()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddPlayer(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleAddPlayer} disabled={!newPlayerName.trim()}>
+              <UserPlus className="w-4 h-4 mr-2" />
+              Hinzufügen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
