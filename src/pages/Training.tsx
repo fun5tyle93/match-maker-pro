@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, CheckCircle2, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { PlayerInput } from '@/components/PlayerInput';
@@ -11,8 +11,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Player, TrainingSession, Match, League } from '@/types';
 import { generatePairings, calculatePlayerStats } from '@/lib/pairingGenerator';
+import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 import {
   loadCurrentSession,
   saveCurrentSession,
@@ -234,10 +241,36 @@ const Training = () => {
             {session ? 'Trainingsabend' : 'Neues Training'}
           </h1>
           {session && (
-            <Button variant="outline" size="sm" onClick={handleResetSession}>
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Zurücksetzen
-            </Button>
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Download className="w-4 h-4 mr-2" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => {
+                    exportTrainingToXLSX(session);
+                    toast.success('XLSX exportiert');
+                  }}>
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Als XLSX
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    exportTrainingToPDF(session);
+                    toast.success('PDF exportiert');
+                  }}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    Als PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" size="sm" onClick={handleResetSession}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Zurücksetzen
+              </Button>
+            </div>
           )}
         </div>
 
