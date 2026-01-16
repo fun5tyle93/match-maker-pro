@@ -9,9 +9,10 @@ interface MatchCardProps {
   match: Match;
   onUpdateScore: (matchId: string, homeScore: number, awayScore: number) => void;
   readonly?: boolean;
+  tableNumber?: number;
 }
 
-export function MatchCard({ match, onUpdateScore, readonly = false }: MatchCardProps) {
+export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber }: MatchCardProps) {
   const [homeScore, setHomeScore] = useState<string>(match.homeScore?.toString() ?? '');
   const [awayScore, setAwayScore] = useState<string>(match.awayScore?.toString() ?? '');
   const [isEditing, setIsEditing] = useState(false);
@@ -61,6 +62,13 @@ export function MatchCard({ match, onUpdateScore, readonly = false }: MatchCardP
         getResultColor()
       )}
     >
+      {tableNumber && (
+        <div className="text-center mb-2">
+          <span className="text-xs font-semibold bg-primary/20 text-primary px-2 py-0.5 rounded">
+            Platte {tableNumber}
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-4">
         {/* Home Player */}
         <div className="flex-1 text-center">
