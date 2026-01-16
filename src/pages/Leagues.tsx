@@ -46,6 +46,7 @@ const Leagues = () => {
   const [newPlayerName, setNewPlayerName] = useState('');
 
   // Edit form state
+  const [editPlayerName, setEditPlayerName] = useState('');
   const [editWins, setEditWins] = useState(0);
   const [editDraws, setEditDraws] = useState(0);
   const [editLosses, setEditLosses] = useState(0);
@@ -96,6 +97,7 @@ const Leagues = () => {
 
   const handleEditPlayer = (stat: PlayerStats) => {
     setEditingPlayer(stat);
+    setEditPlayerName(stat.player.name);
     setEditWins(stat.wins);
     setEditDraws(stat.draws);
     setEditLosses(stat.losses);
@@ -115,6 +117,10 @@ const Leagues = () => {
         const pointsAgainst = editLosses * 2 + editDraws;
         return {
           ...s,
+          player: {
+            ...s.player,
+            name: editPlayerName.trim() || s.player.name,
+          },
           wins: editWins,
           draws: editDraws,
           losses: editLosses,
@@ -514,8 +520,17 @@ const Leagues = () => {
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Spieler bearbeiten: {editingPlayer?.player.name}</DialogTitle>
+            <DialogTitle>Spieler bearbeiten</DialogTitle>
           </DialogHeader>
+          <div className="py-2">
+            <Label htmlFor="editPlayerName">Spielername</Label>
+            <Input
+              id="editPlayerName"
+              value={editPlayerName}
+              onChange={(e) => setEditPlayerName(e.target.value)}
+              className="mt-1"
+            />
+          </div>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-3 gap-4">
               <div>

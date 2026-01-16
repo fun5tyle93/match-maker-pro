@@ -385,11 +385,12 @@ const Training = () => {
                     
                     {isExpanded && (
                       <CardContent className="pt-0 space-y-3">
-                        {matches.map((match) => (
+                        {matches.map((match, index) => (
                           <MatchCard
                             key={match.id}
                             match={match}
                             onUpdateScore={handleUpdateScore}
+                            tableNumber={index + 1}
                           />
                         ))}
                       </CardContent>

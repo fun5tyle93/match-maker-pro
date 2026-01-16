@@ -39,34 +39,87 @@ export function generatePairings(
   const fixed = allPlayers[0];
   const rotating = allPlayers.slice(1);
   
+  // Track home/away counts per player to ensure fair distribution
+  const homeCount: Record<string, number> = {};
+  const awayCount: Record<string, number> = {};
+  const lastRole: Record<string, 'home' | 'away' | null> = {};
+  
+  players.forEach(p => {
+    homeCount[p.id] = 0;
+    awayCount[p.id] = 0;
+    lastRole[p.id] = null;
+  });
+
   for (let repetition = 0; repetition < matchesPerPairing; repetition++) {
     const rotatingCopy = [...rotating];
     
     for (let round = 0; round < numRounds; round++) {
       const roundNumber = repetition * numRounds + round + 1;
       const roundPlayers = [fixed, ...rotatingCopy];
+      const roundMatches: { home: Player; away: Player }[] = [];
       
       for (let i = 0; i < numPlayers / 2; i++) {
-        const home = roundPlayers[i];
-        const away = roundPlayers[numPlayers - 1 - i];
+        const player1 = roundPlayers[i];
+        const player2 = roundPlayers[numPlayers - 1 - i];
         
         // Skip matches involving the "bye" player
-        if (home.id === 'BYE' || away.id === 'BYE') continue;
+        if (player1.id === 'BYE' || player2.id === 'BYE') continue;
         
-        // Alternate home/away based on repetition
-        const finalHome = repetition % 2 === 0 ? home : away;
-        const finalAway = repetition % 2 === 0 ? away : home;
+        // Determine home/away based on fairness criteria:
+        // 1. Avoid consecutive same role
+        // 2. Balance total home/away counts
+        let home = player1;
+        let away = player2;
+        
+        const p1WasHome = lastRole[player1.id] === 'home';
+        const p2WasHome = lastRole[player2.id] === 'home';
+        const p1WasAway = lastRole[player1.id] === 'away';
+        const p2WasAway = lastRole[player2.id] === 'away';
+        
+        // If player1 was just home and player2 wasn't, swap
+        if (p1WasHome && !p2WasHome) {
+          home = player2;
+          away = player1;
+        }
+        // If player2 was just away and player1 wasn't, keep as is
+        else if (p2WasAway && !p1WasAway) {
+          home = player1;
+          away = player2;
+        }
+        // Otherwise balance by total counts
+        else if (homeCount[player1.id] > homeCount[player2.id]) {
+          home = player2;
+          away = player1;
+        } else if (homeCount[player2.id] > homeCount[player1.id]) {
+          home = player1;
+          away = player2;
+        }
+        // For repetitions, alternate based on repetition number
+        else if (repetition % 2 === 1) {
+          home = player2;
+          away = player1;
+        }
+        
+        roundMatches.push({ home, away });
+      }
+      
+      // Add matches and update tracking
+      roundMatches.forEach(({ home, away }) => {
+        homeCount[home.id]++;
+        awayCount[away.id]++;
+        lastRole[home.id] = 'home';
+        lastRole[away.id] = 'away';
         
         matches.push({
           id: matchId(),
           round: roundNumber,
-          homePlayer: finalHome,
-          awayPlayer: finalAway,
+          homePlayer: home,
+          awayPlayer: away,
           homeScore: null,
           awayScore: null,
           isCompleted: false,
         });
-      }
+      });
       
       // Rotate players (keep first fixed, rotate the rest)
       const last = rotatingCopy.pop()!;
