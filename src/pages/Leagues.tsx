@@ -467,7 +467,8 @@ const Leagues = () => {
                                   {(() => {
                                     const totalPoints = stat.points + stat.pointsAgainst;
                                     if (totalPoints === 0) return '-';
-                                    return (stat.points / totalPoints * 100).toFixed(1) + '%';
+                                    const avgPoints = (stat.points / totalPoints) * 2;
+                                    return avgPoints.toFixed(2);
                                   })()}
                                 </td>
                                 <td className="py-3 px-2 text-right">
