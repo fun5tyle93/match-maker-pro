@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { History as HistoryIcon, Calendar, Users, Eye, Trash2, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { History as HistoryIcon, Calendar, Users, Eye, Trash2, Download, FileSpreadsheet, FileText, Pencil, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { StandingsTable } from '@/components/StandingsTable';
 import { MatchCard } from '@/components/MatchCard';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   AlertDialog,
@@ -30,7 +31,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TrainingSession, Match } from '@/types';
-import { loadHistory, deleteFromHistory } from '@/lib/storage';
+import { loadHistory, deleteFromHistory, saveToHistory } from '@/lib/storage';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 
@@ -38,6 +39,8 @@ const History = () => {
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<TrainingSession | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editSessionName, setEditSessionName] = useState('');
 
   useEffect(() => {
     setSessions(loadHistory());
@@ -47,6 +50,27 @@ const History = () => {
     deleteFromHistory(sessionId);
     setSessions(loadHistory());
     toast.success('Training aus Historie gelöscht');
+  };
+
+  const startEditingName = (session: TrainingSession) => {
+    setEditingSessionId(session.id);
+    setEditSessionName(session.name || formatDate(session.date));
+  };
+
+  const saveSessionName = (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const updatedSession = { ...session, name: editSessionName.trim() || undefined };
+    saveToHistory(updatedSession);
+    setSessions(loadHistory());
+    setEditingSessionId(null);
+    toast.success('Name aktualisiert');
+  };
+
+  const cancelEditingName = () => {
+    setEditingSessionId(null);
+    setEditSessionName('');
   };
 
   const formatDate = (dateString: string) => {
@@ -105,11 +129,59 @@ const History = () => {
                 <Card key={session.id} className="animate-fade-in hover:shadow-glow transition-shadow">
                   <CardContent className="p-4 md:p-6">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex-1">
+                        <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <Calendar className="w-4 h-4 text-primary" />
-                          <span className="font-semibold">{formatDate(session.date)}</span>
+                          {editingSessionId === session.id ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={editSessionName}
+                                onChange={(e) => setEditSessionName(e.target.value)}
+                                className="h-7 w-48"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveSessionName(session.id);
+                                  if (e.key === 'Escape') cancelEditingName();
+                                }}
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => saveSessionName(session.id)}
+                              >
+                                <Save className="w-4 h-4 text-primary" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={cancelEditingName}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">
+                                {session.name || formatDate(session.date)}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => startEditingName(session)}
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
+                        {session.name && (
+                          <p className="text-xs text-muted-foreground mb-1">
+                            {formatDate(session.date)}
+                          </p>
+                        )}
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Users className="w-4 h-4" />
@@ -204,8 +276,11 @@ const History = () => {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-primary" />
-                {selectedSession && formatDate(selectedSession.date)}
+                {selectedSession && (selectedSession.name || formatDate(selectedSession.date))}
               </DialogTitle>
+              {selectedSession?.name && (
+                <p className="text-sm text-muted-foreground">{formatDate(selectedSession.date)}</p>
+              )}
             </DialogHeader>
             
             {selectedSession && (
