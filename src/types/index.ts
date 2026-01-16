@@ -29,6 +29,7 @@ export interface PlayerStats {
 
 export interface TrainingSession {
   id: string;
+  name?: string;
   date: string;
   players: Player[];
   matches: Match[];

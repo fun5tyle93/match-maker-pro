@@ -405,6 +405,7 @@ const Leagues = () => {
                             <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
                               <th className="text-left py-3 px-2">#</th>
                               <th className="text-left py-3 px-2">Spieler</th>
+                              <th className="text-center py-3 px-2">Spiele</th>
                               <th className="text-center py-3 px-2">Pkt</th>
                               <th className="text-center py-3 px-2">Tore</th>
                               <th className="text-center py-3 px-2">Diff</th>
@@ -414,6 +415,7 @@ const Leagues = () => {
                               <th className="text-center py-3 px-2" title="Vizemeisterschaften">
                                 <Award className="w-4 h-4 inline text-silver" />
                               </th>
+                              <th className="text-center py-3 px-2" title="Durchschnittspunkte">∅</th>
                               <th className="text-right py-3 px-2"></th>
                             </tr>
                           </thead>
@@ -433,6 +435,9 @@ const Leagues = () => {
                                 </td>
                                 <td className="py-3 px-2">
                                   <span className="font-semibold">{stat.player.name}</span>
+                                </td>
+                                <td className="py-3 px-2 text-center font-mono">
+                                  {Math.floor((stat.points + stat.pointsAgainst) / 2)}
                                 </td>
                                 <td className="py-3 px-2 text-center">
                                   <span className="font-mono font-bold text-primary">{stat.points}</span>
@@ -457,6 +462,13 @@ const Leagues = () => {
                                 </td>
                                 <td className="py-3 px-2 text-center font-mono font-bold text-silver">
                                   {stat.viceChampionships || 0}
+                                </td>
+                                <td className="py-3 px-2 text-center font-mono">
+                                  {(() => {
+                                    const totalPoints = stat.points + stat.pointsAgainst;
+                                    if (totalPoints === 0) return '-';
+                                    return (stat.points / totalPoints * 100).toFixed(1) + '%';
+                                  })()}
                                 </td>
                                 <td className="py-3 px-2 text-right">
                                   <div className="flex items-center justify-end gap-1">
