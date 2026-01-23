@@ -50,41 +50,63 @@ export const PDF_CONFIG = {
   },
 };
 
-// Create a styled PDF document with TKC71 branding
-export function createStyledPDF(title: string, subtitle?: string): { doc: jsPDF; startY: number } {
+// Create a styled PDF document with TKC71 branding and logo
+export function createStyledPDF(title: string, subtitle?: string, logoBase64?: string): { doc: jsPDF; startY: number } {
   const doc = new jsPDF('p', 'mm', 'a4');
   const { pageWidth, margin, headerHeight } = PDF_CONFIG;
-  const contentWidth = pageWidth - (margin * 2);
 
   // Header background with gradient effect (yellow bar)
   doc.setFillColor(...PDF_COLORS.primary);
-  doc.rect(0, 0, pageWidth, headerHeight, 'F');
+  doc.rect(0, 0, pageWidth, headerHeight + 8, 'F');
   
   // Accent line at bottom of header
   doc.setFillColor(...PDF_COLORS.accent);
-  doc.rect(0, headerHeight - 2, pageWidth, 2, 'F');
+  doc.rect(0, headerHeight + 6, pageWidth, 2, 'F');
 
-  // Title text
+  // Add logo centered at top if provided
+  if (logoBase64) {
+    const logoSize = 20;
+    const logoX = (pageWidth - logoSize) / 2;
+    doc.addImage(logoBase64, 'PNG', logoX, 3, logoSize, logoSize);
+  }
+
+  // Title text (left side)
   doc.setTextColor(...PDF_COLORS.white);
   doc.setFontSize(PDF_CONFIG.fontSize.title);
   doc.setFont('helvetica', 'bold');
-  doc.text('TKC71 Hirschlanden', margin, 10);
+  doc.text('TKC71 Hirschlanden', margin, 12);
 
-  // Subtitle / Date
+  // Subtitle / Session name
   doc.setFontSize(PDF_CONFIG.fontSize.subtitle);
   doc.setFont('helvetica', 'normal');
-  doc.text(title, margin, 17);
+  doc.text(title, margin, 20);
 
   // Right-aligned date if provided
   if (subtitle) {
     doc.setFontSize(PDF_CONFIG.fontSize.body);
-    doc.text(subtitle, pageWidth - margin, 17, { align: 'right' });
+    doc.text(subtitle, pageWidth - margin, 20, { align: 'right' });
   }
 
   // Reset text color for content
   doc.setTextColor(...PDF_COLORS.text);
 
-  return { doc, startY: headerHeight + 8 };
+  return { doc, startY: headerHeight + 16 };
+}
+
+// Load logo as base64 for PDF embedding
+export async function loadLogoBase64(): Promise<string | null> {
+  try {
+    const response = await fetch('/images/tkc71-logo.png');
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
 }
 
 // Draw a section header with accent styling

@@ -12,6 +12,7 @@ import {
   getRankColorPDF,
   PDF_COLORS,
   PDF_CONFIG,
+  loadLogoBase64,
 } from './pdfStyles';
 
 // Helper to group matches by round
@@ -60,7 +61,7 @@ export function exportTrainingToXLSX(session: TrainingSession): void {
 }
 
 // Export training session to PDF with TKC71 branding
-export function exportTrainingToPDF(session: TrainingSession): void {
+export async function exportTrainingToPDF(session: TrainingSession): Promise<void> {
   const stats = calculatePlayerStats(session.players, session.matches);
   const matchesByRound = groupMatchesByRound(session.matches);
   
@@ -68,7 +69,10 @@ export function exportTrainingToPDF(session: TrainingSession): void {
   // Use session name as title, with date as subtitle
   const title = session.name || `Trainingsabend ${date}`;
   
-  const { doc, startY } = createStyledPDF(title, date);
+  // Load logo for PDF header
+  const logoBase64 = await loadLogoBase64();
+  
+  const { doc, startY } = createStyledPDF(title, date, logoBase64 || undefined);
   const { margin } = PDF_CONFIG;
   
   let currentY = startY;
@@ -197,16 +201,17 @@ export function exportLeagueToXLSX(league: League): void {
     const games = Math.floor(totalPoints / 2);
     const avgPoints = totalPoints > 0 ? ((s.points / totalPoints) * 2).toFixed(2) : '0.00';
     
+    // Column order matches UI: #, Spieler, Spiele, Pkt, Tore, Diff, M, VM, ∅ Pkt/Spiel
     return {
       'Platz': index + 1,
       'Spieler': s.player.name,
-      'M': s.championships || 0,
-      'VM': s.viceChampionships || 0,
-      '∅': avgPoints,
       'Spiele': games,
       'Punkte': `${s.points}:${s.pointsAgainst}`,
       'Tore': `${s.goalsFor}:${s.goalsAgainst}`,
       'Diff': formatGoalDiff(s.goalDifference),
+      'M': s.championships || 0,
+      'VM': s.viceChampionships || 0,
+      '∅ Pkt/Spiel': avgPoints,
     };
   });
   
@@ -217,11 +222,14 @@ export function exportLeagueToXLSX(league: League): void {
 }
 
 // Export league to PDF with TKC71 branding and all columns
-// Column order matches UI: #, Spieler, Spiele, Pkt, Tore, Diff, M, VM, ∅
-export function exportLeagueToPDF(league: League): void {
+// Column order matches UI: #, Spieler, Spiele, Pkt, Tore, Diff, M, VM, ∅ Pkt/Spiel
+export async function exportLeagueToPDF(league: League): Promise<void> {
   const createdDate = new Date(league.createdAt).toLocaleDateString('de-DE');
   
-  const { doc, startY } = createStyledPDF(league.name, `Erstellt: ${createdDate}`);
+  // Load logo for PDF header
+  const logoBase64 = await loadLogoBase64();
+  
+  const { doc, startY } = createStyledPDF(league.name, `Erstellt: ${createdDate}`, logoBase64 || undefined);
   const { margin } = PDF_CONFIG;
   
   let currentY = startY;
@@ -233,7 +241,7 @@ export function exportLeagueToPDF(league: League): void {
   
   autoTable(doc, {
     startY: currentY,
-    head: [['#', 'Spieler', 'Spiele', 'Pkt', 'Tore', 'Diff', 'M', 'VM', '∅']],
+    head: [['#', 'Spieler', 'Spiele', 'Pkt', 'Tore', 'Diff', 'M', 'VM', '∅ Pkt/Spiel']],
     body: league.playerStats.map((s, index) => {
       const totalPoints = s.points + s.pointsAgainst;
       const games = Math.floor(totalPoints / 2);
@@ -253,15 +261,15 @@ export function exportLeagueToPDF(league: League): void {
     }),
     ...tableStyles,
     columnStyles: {
-      0: { halign: 'center', cellWidth: 10 },
-      1: { halign: 'left', cellWidth: 40 },
-      2: { halign: 'center', cellWidth: 16 },
-      3: { halign: 'center', cellWidth: 22 },
-      4: { halign: 'center', cellWidth: 22 },
-      5: { halign: 'center', cellWidth: 14 },
-      6: { halign: 'center', cellWidth: 12 },
-      7: { halign: 'center', cellWidth: 12 },
-      8: { halign: 'center', cellWidth: 14 },
+      0: { halign: 'center', cellWidth: 8 },
+      1: { halign: 'left', cellWidth: 34 },
+      2: { halign: 'center', cellWidth: 14 },
+      3: { halign: 'center', cellWidth: 18 },
+      4: { halign: 'center', cellWidth: 18 },
+      5: { halign: 'center', cellWidth: 12 },
+      6: { halign: 'center', cellWidth: 10 },
+      7: { halign: 'center', cellWidth: 10 },
+      8: { halign: 'center', cellWidth: 20 },
     },
     margin: { left: margin, right: margin },
     didParseCell: (data) => {
