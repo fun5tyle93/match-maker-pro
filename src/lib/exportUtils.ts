@@ -63,18 +63,18 @@ export function exportTrainingToXLSX(session: TrainingSession): void {
 export function exportTrainingToPDF(session: TrainingSession): void {
   const stats = calculatePlayerStats(session.players, session.matches);
   const matchesByRound = groupMatchesByRound(session.matches);
-  const roundCount = Object.keys(matchesByRound).length;
   
   const date = new Date(session.date).toLocaleDateString('de-DE');
-  const title = session.name || `Trainingsabend`;
+  // Use session name as title, with date as subtitle
+  const title = session.name || `Trainingsabend ${date}`;
   
   const { doc, startY } = createStyledPDF(title, date);
-  const { margin, pageWidth } = PDF_CONFIG;
-  const contentWidth = pageWidth - (margin * 2);
+  const { margin } = PDF_CONFIG;
   
   let currentY = startY;
 
   // ============ STANDINGS TABLE ============
+  // Column order matches UI: #, Spieler, Pkt, Tore, Diff
   currentY = drawSectionHeader(doc, 'Tabelle', currentY);
   
   const tableStyles = getCompactTableStyles();
@@ -116,6 +116,8 @@ export function exportTrainingToPDF(session: TrainingSession): void {
   // ============ MATCHES BY ROUND (Two-column layout) ============
   currentY = drawSectionHeader(doc, 'Spiele', currentY);
   
+  const { pageWidth } = PDF_CONFIG;
+  const contentWidth = pageWidth - (margin * 2);
   const colWidth = (contentWidth - 4) / 2;
   const roundKeys = Object.keys(matchesByRound).map(Number).sort((a, b) => a - b);
   
@@ -215,6 +217,7 @@ export function exportLeagueToXLSX(league: League): void {
 }
 
 // Export league to PDF with TKC71 branding and all columns
+// Column order matches UI: #, Spieler, Spiele, Pkt, Tore, Diff, M, VM, ∅
 export function exportLeagueToPDF(league: League): void {
   const createdDate = new Date(league.createdAt).toLocaleDateString('de-DE');
   
@@ -230,7 +233,7 @@ export function exportLeagueToPDF(league: League): void {
   
   autoTable(doc, {
     startY: currentY,
-    head: [['#', 'Spieler', 'M', 'VM', '∅', 'Spiele', 'Pkt', 'Tore', 'Diff']],
+    head: [['#', 'Spieler', 'Spiele', 'Pkt', 'Tore', 'Diff', 'M', 'VM', '∅']],
     body: league.playerStats.map((s, index) => {
       const totalPoints = s.points + s.pointsAgainst;
       const games = Math.floor(totalPoints / 2);
@@ -239,25 +242,25 @@ export function exportLeagueToPDF(league: League): void {
       return [
         index + 1,
         s.player.name,
-        s.championships || 0,
-        s.viceChampionships || 0,
-        avgPoints,
         games,
         `${s.points}:${s.pointsAgainst}`,
         `${s.goalsFor}:${s.goalsAgainst}`,
         formatGoalDiff(s.goalDifference),
+        s.championships || 0,
+        s.viceChampionships || 0,
+        avgPoints,
       ];
     }),
     ...tableStyles,
     columnStyles: {
       0: { halign: 'center', cellWidth: 10 },
       1: { halign: 'left', cellWidth: 40 },
-      2: { halign: 'center', cellWidth: 12 },
-      3: { halign: 'center', cellWidth: 12 },
-      4: { halign: 'center', cellWidth: 14 },
-      5: { halign: 'center', cellWidth: 16 },
-      6: { halign: 'center', cellWidth: 22 },
-      7: { halign: 'center', cellWidth: 22 },
+      2: { halign: 'center', cellWidth: 16 },
+      3: { halign: 'center', cellWidth: 22 },
+      4: { halign: 'center', cellWidth: 22 },
+      5: { halign: 'center', cellWidth: 14 },
+      6: { halign: 'center', cellWidth: 12 },
+      7: { halign: 'center', cellWidth: 12 },
       8: { halign: 'center', cellWidth: 14 },
     },
     margin: { left: margin, right: margin },
@@ -270,29 +273,29 @@ export function exportLeagueToPDF(league: League): void {
           data.cell.styles.fontStyle = 'bold';
         }
       }
-      // Gold color for championships
-      if (data.section === 'body' && data.column.index === 2) {
+      // Color goal difference (column 5)
+      if (data.section === 'body' && data.column.index === 5) {
+        const text = String(data.cell.raw);
+        if (text.startsWith('+')) {
+          data.cell.styles.textColor = PDF_COLORS.positive;
+        } else if (text.startsWith('-')) {
+          data.cell.styles.textColor = PDF_COLORS.negative;
+        }
+      }
+      // Gold color for championships (column 6)
+      if (data.section === 'body' && data.column.index === 6) {
         const value = Number(data.cell.raw);
         if (value > 0) {
           data.cell.styles.textColor = PDF_COLORS.gold;
           data.cell.styles.fontStyle = 'bold';
         }
       }
-      // Silver color for vice championships
-      if (data.section === 'body' && data.column.index === 3) {
+      // Silver color for vice championships (column 7)
+      if (data.section === 'body' && data.column.index === 7) {
         const value = Number(data.cell.raw);
         if (value > 0) {
           data.cell.styles.textColor = PDF_COLORS.silver;
           data.cell.styles.fontStyle = 'bold';
-        }
-      }
-      // Color goal difference
-      if (data.section === 'body' && data.column.index === 8) {
-        const text = String(data.cell.raw);
-        if (text.startsWith('+')) {
-          data.cell.styles.textColor = PDF_COLORS.positive;
-        } else if (text.startsWith('-')) {
-          data.cell.styles.textColor = PDF_COLORS.negative;
         }
       }
     },
