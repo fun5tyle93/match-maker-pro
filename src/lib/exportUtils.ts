@@ -1,29 +1,49 @@
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { TrainingSession, League, PlayerStats, Match } from '@/types';
+import { TrainingSession, League, Match } from '@/types';
 import { calculatePlayerStats } from './pairingGenerator';
+import {
+  createStyledPDF,
+  drawSectionHeader,
+  drawRoundHeader,
+  getTableStyles,
+  getCompactTableStyles,
+  formatGoalDiff,
+  getRankColorPDF,
+  PDF_COLORS,
+  PDF_CONFIG,
+} from './pdfStyles';
+
+// Helper to group matches by round
+function groupMatchesByRound(matches: Match[]): Record<number, Match[]> {
+  return matches.reduce((acc, match) => {
+    if (!acc[match.round]) acc[match.round] = [];
+    acc[match.round].push(match);
+    return acc;
+  }, {} as Record<number, Match[]>);
+}
 
 // Export training session to XLSX
 export function exportTrainingToXLSX(session: TrainingSession): void {
   const stats = calculatePlayerStats(session.players, session.matches);
   const wb = XLSX.utils.book_new();
 
-  // Standings sheet
+  // Standings sheet with all columns
   const standingsData = stats.map((s, index) => ({
     'Platz': index + 1,
     'Spieler': s.player.name,
     'Punkte': `${s.points}:${s.pointsAgainst}`,
     'Tore': `${s.goalsFor}:${s.goalsAgainst}`,
-    'Diff': s.goalDifference > 0 ? `+${s.goalDifference}` : s.goalDifference,
+    'Diff': formatGoalDiff(s.goalDifference),
   }));
   
   const standingsSheet = XLSX.utils.json_to_sheet(standingsData);
   XLSX.utils.book_append_sheet(wb, standingsSheet, 'Tabelle');
 
-  // Matches sheet
+  // Matches sheet grouped by round
   const matchesData = session.matches.map(m => ({
     'Runde': m.round,
+    'Tisch': session.matches.filter(match => match.round === m.round).indexOf(m) + 1,
     'Heim': m.homePlayer.name,
     'Ergebnis': m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-',
     'Gast': m.awayPlayer.name,
@@ -33,107 +53,249 @@ export function exportTrainingToXLSX(session: TrainingSession): void {
   XLSX.utils.book_append_sheet(wb, matchesSheet, 'Spiele');
 
   const date = new Date(session.date).toLocaleDateString('de-DE');
-  XLSX.writeFile(wb, `Trainingsabend_${date.replace(/\./g, '-')}.xlsx`);
+  const fileName = session.name 
+    ? `${session.name.replace(/\s/g, '_')}.xlsx`
+    : `Trainingsabend_${date.replace(/\./g, '-')}.xlsx`;
+  XLSX.writeFile(wb, fileName);
 }
 
-// Export training session to PDF
+// Export training session to PDF with TKC71 branding
 export function exportTrainingToPDF(session: TrainingSession): void {
   const stats = calculatePlayerStats(session.players, session.matches);
-  const doc = new jsPDF();
+  const matchesByRound = groupMatchesByRound(session.matches);
+  const roundCount = Object.keys(matchesByRound).length;
   
   const date = new Date(session.date).toLocaleDateString('de-DE');
+  const title = session.name || `Trainingsabend`;
   
-  // Title
-  doc.setFontSize(18);
-  doc.text(`Trainingsabend - ${date}`, 14, 20);
+  const { doc, startY } = createStyledPDF(title, date);
+  const { margin, pageWidth } = PDF_CONFIG;
+  const contentWidth = pageWidth - (margin * 2);
   
-  // Standings table
-  doc.setFontSize(14);
-  doc.text('Tabelle', 14, 35);
+  let currentY = startY;
+
+  // ============ STANDINGS TABLE ============
+  currentY = drawSectionHeader(doc, 'Tabelle', currentY);
+  
+  const tableStyles = getCompactTableStyles();
   
   autoTable(doc, {
-    startY: 40,
-    head: [['#', 'Spieler', 'Punkte', 'Tore', 'Diff']],
+    startY: currentY,
+    head: [['#', 'Spieler', 'Pkt', 'Tore', 'Diff']],
     body: stats.map((s, index) => [
       index + 1,
       s.player.name,
       `${s.points}:${s.pointsAgainst}`,
       `${s.goalsFor}:${s.goalsAgainst}`,
-      s.goalDifference > 0 ? `+${s.goalDifference}` : s.goalDifference,
+      formatGoalDiff(s.goalDifference),
     ]),
-    styles: { halign: 'center' },
-    columnStyles: { 1: { halign: 'left' } },
-  });
-  
-  // Matches table
-  const finalY = (doc as any).lastAutoTable.finalY || 100;
-  doc.setFontSize(14);
-  doc.text('Spiele', 14, finalY + 15);
-  
-  autoTable(doc, {
-    startY: finalY + 20,
-    head: [['Runde', 'Heim', 'Ergebnis', 'Gast']],
-    body: session.matches.map(m => [
-      m.round,
-      m.homePlayer.name,
-      m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-',
-      m.awayPlayer.name,
-    ]),
-    styles: { halign: 'center' },
-    columnStyles: { 1: { halign: 'left' }, 3: { halign: 'left' } },
+    ...tableStyles,
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 8 },
+      1: { halign: 'left', cellWidth: 35 },
+      2: { halign: 'center', cellWidth: 18 },
+      3: { halign: 'center', cellWidth: 18 },
+      4: { halign: 'center', cellWidth: 12 },
+    },
+    margin: { left: margin, right: margin },
+    tableWidth: 'wrap',
+    didParseCell: (data) => {
+      // Highlight top 3 ranks
+      if (data.section === 'body' && data.column.index === 0) {
+        const rank = data.row.index + 1;
+        if (rank <= 3) {
+          data.cell.styles.textColor = getRankColorPDF(rank);
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    },
   });
 
-  doc.save(`Trainingsabend_${date.replace(/\./g, '-')}.pdf`);
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  // ============ MATCHES BY ROUND (Two-column layout) ============
+  currentY = drawSectionHeader(doc, 'Spiele', currentY);
+  
+  const colWidth = (contentWidth - 4) / 2;
+  const roundKeys = Object.keys(matchesByRound).map(Number).sort((a, b) => a - b);
+  
+  // Calculate optimal layout: if 8 rounds or less, try to fit all on page
+  const matchHeight = 4; // Height per match row
+  const roundHeaderHeight = 8; // Height for round header
+  
+  let colStartY = currentY;
+  let col = 0;
+  let maxYInRow = currentY;
+
+  roundKeys.forEach((roundNum, roundIndex) => {
+    const matches = matchesByRound[roundNum];
+    const roundTotalHeight = roundHeaderHeight + (matches.length * matchHeight) + 4;
+    
+    // Determine column position
+    const xPos = margin + (col * (colWidth + 4));
+    
+    // Check if we need to start a new row of columns
+    if (col === 0) {
+      colStartY = maxYInRow + 2;
+    }
+    
+    let roundY = colStartY;
+    
+    // Round header
+    roundY = drawRoundHeader(doc, roundNum, xPos, roundY, colWidth);
+    
+    // Matches in this round
+    doc.setFontSize(PDF_CONFIG.fontSize.small);
+    doc.setFont('helvetica', 'normal');
+    
+    matches.forEach((match, mIdx) => {
+      const tableNum = mIdx + 1;
+      const homeText = match.homePlayer.name;
+      const awayText = match.awayPlayer.name;
+      const scoreText = match.isCompleted ? `${match.homeScore}:${match.awayScore}` : '-:-';
+      
+      // Draw match row
+      doc.setTextColor(...PDF_COLORS.textMuted);
+      doc.text(`T${tableNum}`, xPos + 2, roundY + 3);
+      
+      doc.setTextColor(...PDF_COLORS.text);
+      doc.text(homeText, xPos + 10, roundY + 3);
+      
+      doc.setTextColor(...PDF_COLORS.accent);
+      doc.setFont('helvetica', 'bold');
+      doc.text(scoreText, xPos + colWidth / 2, roundY + 3, { align: 'center' });
+      
+      doc.setTextColor(...PDF_COLORS.text);
+      doc.setFont('helvetica', 'normal');
+      doc.text(awayText, xPos + colWidth - 2, roundY + 3, { align: 'right' });
+      
+      roundY += matchHeight;
+    });
+    
+    // Track max Y for this row
+    maxYInRow = Math.max(maxYInRow, roundY + 2);
+    
+    // Alternate columns
+    col = (col + 1) % 2;
+  });
+
+  // Save the PDF
+  const fileName = session.name 
+    ? `${session.name.replace(/\s/g, '_')}.pdf`
+    : `Trainingsabend_${date.replace(/\./g, '-')}.pdf`;
+  doc.save(fileName);
 }
 
-// Export league to XLSX
+// Export league to XLSX with all columns
 export function exportLeagueToXLSX(league: League): void {
   const wb = XLSX.utils.book_new();
 
-  const standingsData = league.playerStats.map((s, index) => ({
-    'Platz': index + 1,
-    'Spieler': s.player.name,
-    'Punkte': `${s.points}:${s.pointsAgainst}`,
-    'Tore': `${s.goalsFor}:${s.goalsAgainst}`,
-    'Diff': s.goalDifference > 0 ? `+${s.goalDifference}` : s.goalDifference,
-  }));
+  const standingsData = league.playerStats.map((s, index) => {
+    const totalPoints = s.points + s.pointsAgainst;
+    const games = Math.floor(totalPoints / 2);
+    const avgPoints = totalPoints > 0 ? ((s.points / totalPoints) * 2).toFixed(2) : '0.00';
+    
+    return {
+      'Platz': index + 1,
+      'Spieler': s.player.name,
+      'M': s.championships || 0,
+      'VM': s.viceChampionships || 0,
+      '∅': avgPoints,
+      'Spiele': games,
+      'Punkte': `${s.points}:${s.pointsAgainst}`,
+      'Tore': `${s.goalsFor}:${s.goalsAgainst}`,
+      'Diff': formatGoalDiff(s.goalDifference),
+    };
+  });
   
   const standingsSheet = XLSX.utils.json_to_sheet(standingsData);
-  XLSX.utils.book_append_sheet(wb, standingsSheet, 'Tabelle');
+  XLSX.utils.book_append_sheet(wb, standingsSheet, 'Gesamttabelle');
 
   XLSX.writeFile(wb, `Liga_${league.name.replace(/\s/g, '_')}.xlsx`);
 }
 
-// Export league to PDF
+// Export league to PDF with TKC71 branding and all columns
 export function exportLeagueToPDF(league: League): void {
-  const doc = new jsPDF();
-  
-  // Title
-  doc.setFontSize(18);
-  doc.text(`${league.name}`, 14, 20);
-  
-  doc.setFontSize(10);
-  doc.setTextColor(128);
   const createdDate = new Date(league.createdAt).toLocaleDateString('de-DE');
-  doc.text(`Erstellt am ${createdDate}`, 14, 28);
-  doc.setTextColor(0);
   
-  // Standings table
-  doc.setFontSize(14);
-  doc.text('Gesamttabelle', 14, 42);
+  const { doc, startY } = createStyledPDF(league.name, `Erstellt: ${createdDate}`);
+  const { margin } = PDF_CONFIG;
+  
+  let currentY = startY;
+
+  // ============ STANDINGS TABLE ============
+  currentY = drawSectionHeader(doc, 'Gesamttabelle', currentY);
+  
+  const tableStyles = getTableStyles();
   
   autoTable(doc, {
-    startY: 47,
-    head: [['#', 'Spieler', 'Punkte', 'Tore', 'Diff']],
-    body: league.playerStats.map((s, index) => [
-      index + 1,
-      s.player.name,
-      `${s.points}:${s.pointsAgainst}`,
-      `${s.goalsFor}:${s.goalsAgainst}`,
-      s.goalDifference > 0 ? `+${s.goalDifference}` : s.goalDifference,
-    ]),
-    styles: { halign: 'center' },
-    columnStyles: { 1: { halign: 'left' } },
+    startY: currentY,
+    head: [['#', 'Spieler', 'M', 'VM', '∅', 'Spiele', 'Pkt', 'Tore', 'Diff']],
+    body: league.playerStats.map((s, index) => {
+      const totalPoints = s.points + s.pointsAgainst;
+      const games = Math.floor(totalPoints / 2);
+      const avgPoints = totalPoints > 0 ? ((s.points / totalPoints) * 2).toFixed(2) : '-';
+      
+      return [
+        index + 1,
+        s.player.name,
+        s.championships || 0,
+        s.viceChampionships || 0,
+        avgPoints,
+        games,
+        `${s.points}:${s.pointsAgainst}`,
+        `${s.goalsFor}:${s.goalsAgainst}`,
+        formatGoalDiff(s.goalDifference),
+      ];
+    }),
+    ...tableStyles,
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      1: { halign: 'left', cellWidth: 40 },
+      2: { halign: 'center', cellWidth: 12 },
+      3: { halign: 'center', cellWidth: 12 },
+      4: { halign: 'center', cellWidth: 14 },
+      5: { halign: 'center', cellWidth: 16 },
+      6: { halign: 'center', cellWidth: 22 },
+      7: { halign: 'center', cellWidth: 22 },
+      8: { halign: 'center', cellWidth: 14 },
+    },
+    margin: { left: margin, right: margin },
+    didParseCell: (data) => {
+      // Highlight top 3 ranks
+      if (data.section === 'body' && data.column.index === 0) {
+        const rank = data.row.index + 1;
+        if (rank <= 3) {
+          data.cell.styles.textColor = getRankColorPDF(rank);
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+      // Gold color for championships
+      if (data.section === 'body' && data.column.index === 2) {
+        const value = Number(data.cell.raw);
+        if (value > 0) {
+          data.cell.styles.textColor = PDF_COLORS.gold;
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+      // Silver color for vice championships
+      if (data.section === 'body' && data.column.index === 3) {
+        const value = Number(data.cell.raw);
+        if (value > 0) {
+          data.cell.styles.textColor = PDF_COLORS.silver;
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+      // Color goal difference
+      if (data.section === 'body' && data.column.index === 8) {
+        const text = String(data.cell.raw);
+        if (text.startsWith('+')) {
+          data.cell.styles.textColor = PDF_COLORS.positive;
+        } else if (text.startsWith('-')) {
+          data.cell.styles.textColor = PDF_COLORS.negative;
+        }
+      }
+    },
   });
 
   doc.save(`Liga_${league.name.replace(/\s/g, '_')}.pdf`);
