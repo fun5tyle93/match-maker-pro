@@ -415,7 +415,7 @@ const Leagues = () => {
                               <th className="text-center py-3 px-2" title="Vizemeisterschaften">
                                 <Award className="w-4 h-4 inline text-silver" />
                               </th>
-                              <th className="text-center py-3 px-2" title="Durchschnittspunkte">∅</th>
+                              <th className="text-center py-3 px-2" title="Durchschnittliche Punkte pro Spiel (0-2)">∅ Pkt/Spiel</th>
                               <th className="text-right py-3 px-2"></th>
                             </tr>
                           </thead>
