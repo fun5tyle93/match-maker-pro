@@ -5,7 +5,6 @@ import { calculatePlayerStats } from './pairingGenerator';
 import {
   createStyledPDF,
   drawSectionHeader,
-  drawRoundHeader,
   getTableStyles,
   getCompactTableStyles,
   formatGoalDiff,
@@ -117,41 +116,64 @@ export async function exportTrainingToPDF(session: TrainingSession): Promise<voi
 
   currentY = (doc as any).lastAutoTable.finalY + 8;
 
-  // ============ MATCHES BY ROUND (Two-column layout) ============
+  // ============ MATCHES BY ROUND (Scaled layout for A4) ============
   currentY = drawSectionHeader(doc, 'Spiele', currentY);
   
-  const { pageWidth } = PDF_CONFIG;
+  const { pageWidth, pageHeight } = PDF_CONFIG;
   const contentWidth = pageWidth - (margin * 2);
-  const colWidth = (contentWidth - 4) / 2;
   const roundKeys = Object.keys(matchesByRound).map(Number).sort((a, b) => a - b);
+  const numRounds = roundKeys.length;
   
-  // Calculate optimal layout: if 8 rounds or less, try to fit all on page
-  const matchHeight = 4; // Height per match row
-  const roundHeaderHeight = 8; // Height for round header
+  // Calculate available space and scale factor
+  const availableHeight = pageHeight - currentY - 10; // Leave 10mm bottom margin
+  const maxMatchesPerRound = Math.max(...Object.values(matchesByRound).map(m => m.length));
+  
+  // Dynamic scaling: fewer rounds = larger display
+  // Base sizes for 8 rounds, scale up for fewer
+  const scaleFactor = numRounds <= 4 ? 1.8 : numRounds <= 6 ? 1.4 : numRounds <= 8 ? 1.2 : 1.0;
+  
+  const baseMatchHeight = 4;
+  const baseRoundHeaderHeight = 6;
+  const baseFontSize = PDF_CONFIG.fontSize.small;
+  
+  const matchHeight = baseMatchHeight * scaleFactor;
+  const roundHeaderHeight = baseRoundHeaderHeight * scaleFactor;
+  const fontSize = Math.min(baseFontSize * scaleFactor, 10); // Cap font size at 10
+  
+  // Two-column layout
+  const colGap = 6 * scaleFactor;
+  const colWidth = (contentWidth - colGap) / 2;
   
   let colStartY = currentY;
   let col = 0;
   let maxYInRow = currentY;
 
-  roundKeys.forEach((roundNum, roundIndex) => {
+  roundKeys.forEach((roundNum) => {
     const matches = matchesByRound[roundNum];
-    const roundTotalHeight = roundHeaderHeight + (matches.length * matchHeight) + 4;
     
     // Determine column position
-    const xPos = margin + (col * (colWidth + 4));
+    const xPos = margin + (col * (colWidth + colGap));
     
     // Check if we need to start a new row of columns
     if (col === 0) {
-      colStartY = maxYInRow + 2;
+      colStartY = maxYInRow + (2 * scaleFactor);
     }
     
     let roundY = colStartY;
     
-    // Round header
-    roundY = drawRoundHeader(doc, roundNum, xPos, roundY, colWidth);
+    // Round header (scaled)
+    doc.setFillColor(...PDF_COLORS.primary);
+    doc.roundedRect(xPos, roundY, colWidth, roundHeaderHeight * 0.8, 1, 1, 'F');
     
-    // Matches in this round
-    doc.setFontSize(PDF_CONFIG.fontSize.small);
+    doc.setTextColor(...PDF_COLORS.text);
+    doc.setFontSize(fontSize + 1);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Runde ${roundNum}`, xPos + colWidth / 2, roundY + (roundHeaderHeight * 0.55), { align: 'center' });
+    
+    roundY += roundHeaderHeight;
+    
+    // Matches in this round (scaled)
+    doc.setFontSize(fontSize);
     doc.setFont('helvetica', 'normal');
     
     matches.forEach((match, mIdx) => {
@@ -160,26 +182,28 @@ export async function exportTrainingToPDF(session: TrainingSession): Promise<voi
       const awayText = match.awayPlayer.name;
       const scoreText = match.isCompleted ? `${match.homeScore}:${match.awayScore}` : '-:-';
       
+      const textY = roundY + (matchHeight * 0.65);
+      
       // Draw match row
       doc.setTextColor(...PDF_COLORS.textMuted);
-      doc.text(`T${tableNum}`, xPos + 2, roundY + 3);
+      doc.text(`T${tableNum}`, xPos + 2, textY);
       
       doc.setTextColor(...PDF_COLORS.text);
-      doc.text(homeText, xPos + 10, roundY + 3);
+      doc.text(homeText, xPos + (8 * scaleFactor), textY);
       
       doc.setTextColor(...PDF_COLORS.accent);
       doc.setFont('helvetica', 'bold');
-      doc.text(scoreText, xPos + colWidth / 2, roundY + 3, { align: 'center' });
+      doc.text(scoreText, xPos + colWidth / 2, textY, { align: 'center' });
       
       doc.setTextColor(...PDF_COLORS.text);
       doc.setFont('helvetica', 'normal');
-      doc.text(awayText, xPos + colWidth - 2, roundY + 3, { align: 'right' });
+      doc.text(awayText, xPos + colWidth - 2, textY, { align: 'right' });
       
       roundY += matchHeight;
     });
     
     // Track max Y for this row
-    maxYInRow = Math.max(maxYInRow, roundY + 2);
+    maxYInRow = Math.max(maxYInRow, roundY + (2 * scaleFactor));
     
     // Alternate columns
     col = (col + 1) % 2;
