@@ -51,8 +51,14 @@ export const PDF_CONFIG = {
 };
 
 // Create a styled PDF document with TKC71 branding and logo
+// Compressed for minimal file size
 export function createStyledPDF(title: string, subtitle?: string, logoBase64?: string): { doc: jsPDF; startY: number } {
-  const doc = new jsPDF('p', 'mm', 'a4');
+  const doc = new jsPDF({
+    orientation: 'p',
+    unit: 'mm',
+    format: 'a4',
+    compress: true, // Enable compression for smaller file size
+  });
   const { pageWidth, margin, headerHeight } = PDF_CONFIG;
 
   // Header background with gradient effect (yellow bar)
