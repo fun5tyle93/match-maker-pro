@@ -1,7 +1,8 @@
 import { League, PlayerStats, Player } from '@/types';
 import { loadLeagues, saveLeagues } from '@/lib/storage';
 
-const SEED_KEY = 'kicker_seed_2026_v2';
+const SEED_KEY_ERWACHSENE = 'kicker_seed_2026_v2';
+const SEED_KEY_JUGEND = 'kicker_seed_jugend_2026';
 
 function createPlayer(name: string): Player {
   return { id: crypto.randomUUID(), name };
@@ -13,8 +14,6 @@ function createStatFromPDF(
   goalsFor: number, goalsAgainst: number,
   championships: number, viceChampionships: number,
 ): PlayerStats {
-  // Derive W/D/L from points: points = 2W + D, pointsAgainst = 2L + D, W+D+L = games
-  // D = (points + pointsAgainst) - 2*games
   const draws = (points + pointsAgainst) - 2 * games;
   const wins = (points - draws) / 2;
   const losses = (pointsAgainst - draws) / 2;
@@ -30,7 +29,7 @@ function createStatFromPDF(
 }
 
 export function seedLeague2026(): void {
-  if (localStorage.getItem(SEED_KEY)) return;
+  if (localStorage.getItem(SEED_KEY_ERWACHSENE)) return;
 
   const league: League = {
     id: crypto.randomUUID(),
@@ -55,5 +54,33 @@ export function seedLeague2026(): void {
   const leagues = loadLeagues();
   leagues.push(league);
   saveLeagues(leagues);
-  localStorage.setItem(SEED_KEY, 'true');
+  localStorage.setItem(SEED_KEY_ERWACHSENE, 'true');
+}
+
+export function seedLeagueJugend2026(): void {
+  if (localStorage.getItem(SEED_KEY_JUGEND)) return;
+
+  const league: League = {
+    id: crypto.randomUUID(),
+    name: 'Jugend und Damen 2026',
+    year: 2026,
+    playerStats: [
+      createStatFromPDF('Heidi Grellmann',   24, 36, 12, 72, 32, 2, 0),
+      createStatFromPDF('Mika Buza',         24, 25, 23, 40, 36, 1, 0),
+      createStatFromPDF('Maxi Scheibitz',    24, 21, 27, 33, 48, 0, 0),
+      createStatFromPDF('Jakob Grätscher',   19, 19, 19, 28, 31, 0, 1),
+      createStatFromPDF('Timo Schwarz',      24, 19, 29, 34, 60, 0, 0),
+      createStatFromPDF('Erik Schwarz',      14, 18, 10, 50, 23, 0, 2),
+      createStatFromPDF('Julian Bencsik',    24, 18, 30, 25, 50, 0, 0),
+      createStatFromPDF('Max Daub a.K.',      9,  9,  9, 17, 12, 0, 0),
+      createStatFromPDF('Jakob Birenbaum',    9,  9,  9, 11, 11, 0, 0),
+      createStatFromPDF('Jamil Hecker',       9,  6, 12,  8, 15, 0, 0),
+    ],
+    createdAt: '2026-01-16T00:00:00.000Z',
+  };
+
+  const leagues = loadLeagues();
+  leagues.push(league);
+  saveLeagues(leagues);
+  localStorage.setItem(SEED_KEY_JUGEND, 'true');
 }
