@@ -41,14 +41,25 @@ const History = () => {
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editSessionName, setEditSessionName] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setSessions(loadHistory());
+    const init = async () => {
+      try {
+        setSessions(await loadHistory());
+      } catch (err) {
+        console.error('Failed to load history:', err);
+        toast.error('Fehler beim Laden der Historie');
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
   }, []);
 
-  const handleDelete = (sessionId: string) => {
-    deleteFromHistory(sessionId);
-    setSessions(loadHistory());
+  const handleDelete = async (sessionId: string) => {
+    await deleteFromHistory(sessionId);
+    setSessions(await loadHistory());
     toast.success('Training aus Historie gelöscht');
   };
 
@@ -57,13 +68,13 @@ const History = () => {
     setEditSessionName(session.name || formatDate(session.date));
   };
 
-  const saveSessionName = (sessionId: string) => {
+  const saveSessionName = async (sessionId: string) => {
     const session = sessions.find(s => s.id === sessionId);
     if (!session) return;
 
     const updatedSession = { ...session, name: editSessionName.trim() || undefined };
-    saveToHistory(updatedSession);
-    setSessions(loadHistory());
+    await saveToHistory(updatedSession);
+    setSessions(await loadHistory());
     setEditingSessionId(null);
     toast.success('Name aktualisiert');
   };
@@ -97,6 +108,17 @@ const History = () => {
       return acc;
     }, {} as Record<number, Match[]>);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-6 md:py-8">
+          <p className="text-muted-foreground text-center py-16">Lade Historie...</p>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

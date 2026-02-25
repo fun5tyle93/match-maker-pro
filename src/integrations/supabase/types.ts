@@ -14,7 +14,215 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      current_session: {
+        Row: {
+          id: number
+          session_id: string | null
+        }
+        Insert: {
+          id?: number
+          session_id?: string | null
+        }
+        Update: {
+          id?: number
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "current_session_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leagues: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      matches: {
+        Row: {
+          away_player_id: string
+          away_player_name: string
+          away_score: number | null
+          home_player_id: string
+          home_player_name: string
+          home_score: number | null
+          id: string
+          is_completed: boolean
+          round: number
+          session_id: string
+        }
+        Insert: {
+          away_player_id: string
+          away_player_name: string
+          away_score?: number | null
+          home_player_id: string
+          home_player_name: string
+          home_score?: number | null
+          id?: string
+          is_completed?: boolean
+          round: number
+          session_id: string
+        }
+        Update: {
+          away_player_id?: string
+          away_player_name?: string
+          away_score?: number | null
+          home_player_id?: string
+          home_player_name?: string
+          home_score?: number | null
+          id?: string
+          is_completed?: boolean
+          round?: number
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matches_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_stats: {
+        Row: {
+          championships: number
+          draws: number
+          goal_difference: number
+          goals_against: number
+          goals_for: number
+          id: string
+          league_id: string
+          losses: number
+          player_id: string
+          player_name: string
+          points: number
+          points_against: number
+          vice_championships: number
+          wins: number
+        }
+        Insert: {
+          championships?: number
+          draws?: number
+          goal_difference?: number
+          goals_against?: number
+          goals_for?: number
+          id?: string
+          league_id: string
+          losses?: number
+          player_id?: string
+          player_name: string
+          points?: number
+          points_against?: number
+          vice_championships?: number
+          wins?: number
+        }
+        Update: {
+          championships?: number
+          draws?: number
+          goal_difference?: number
+          goals_against?: number
+          goals_for?: number
+          id?: string
+          league_id?: string
+          losses?: number
+          player_id?: string
+          player_name?: string
+          points?: number
+          points_against?: number
+          vice_championships?: number
+          wins?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_stats_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_players: {
+        Row: {
+          id: string
+          player_id: string
+          player_name: string
+          session_id: string
+        }
+        Insert: {
+          id?: string
+          player_id: string
+          player_name: string
+          session_id: string
+        }
+        Update: {
+          id?: string
+          player_id?: string
+          player_name?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_players_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_sessions: {
+        Row: {
+          date: string
+          id: string
+          is_completed: boolean
+          matches_per_pairing: number
+          name: string | null
+          round_count: number
+          transferred_to_leagues: string[] | null
+        }
+        Insert: {
+          date?: string
+          id?: string
+          is_completed?: boolean
+          matches_per_pairing?: number
+          name?: string | null
+          round_count?: number
+          transferred_to_leagues?: string[] | null
+        }
+        Update: {
+          date?: string
+          id?: string
+          is_completed?: boolean
+          matches_per_pairing?: number
+          name?: string | null
+          round_count?: number
+          transferred_to_leagues?: string[] | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
