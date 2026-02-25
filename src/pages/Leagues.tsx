@@ -44,6 +44,7 @@ const Leagues = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [loading, setLoading] = useState(true);
 
   // Edit form state
   const [editPlayerName, setEditPlayerName] = useState('');
@@ -56,14 +57,24 @@ const Leagues = () => {
   const [editViceChampionships, setEditViceChampionships] = useState(0);
 
   useEffect(() => {
-    const loaded = loadLeagues();
-    setLeagues(loaded);
-    if (loaded.length > 0) {
-      setSelectedLeague(loaded[0]);
-    }
+    const init = async () => {
+      try {
+        const loaded = await loadLeagues();
+        setLeagues(loaded);
+        if (loaded.length > 0) {
+          setSelectedLeague(loaded[0]);
+        }
+      } catch (err) {
+        console.error('Failed to load leagues:', err);
+        toast.error('Fehler beim Laden der Ligen');
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
   }, []);
 
-  const handleCreateLeague = () => {
+  const handleCreateLeague = async () => {
     if (!newLeagueName.trim()) return;
 
     const newLeague: League = {
@@ -76,17 +87,17 @@ const Leagues = () => {
 
     const updatedLeagues = [...leagues, newLeague];
     setLeagues(updatedLeagues);
-    saveLeagues(updatedLeagues);
+    await saveLeagues(updatedLeagues);
     setSelectedLeague(newLeague);
     setNewLeagueName('');
     setShowNewLeague(false);
     toast.success(`Liga "${newLeague.name}" erstellt`);
   };
 
-  const handleDeleteLeague = (leagueId: string) => {
+  const handleDeleteLeague = async (leagueId: string) => {
     const updatedLeagues = leagues.filter(l => l.id !== leagueId);
     setLeagues(updatedLeagues);
-    saveLeagues(updatedLeagues);
+    await saveLeagues(updatedLeagues);
     
     if (selectedLeague?.id === leagueId) {
       setSelectedLeague(updatedLeagues[0] || null);
@@ -108,7 +119,7 @@ const Leagues = () => {
     setShowEditDialog(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!selectedLeague || !editingPlayer) return;
 
     const updatedStats = selectedLeague.playerStats.map(s => {
@@ -136,7 +147,6 @@ const Leagues = () => {
       return s;
     });
 
-    // Re-sort standings
     updatedStats.sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
       if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
@@ -147,13 +157,13 @@ const Leagues = () => {
     const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
     
     setLeagues(updatedLeagues);
-    saveLeagues(updatedLeagues);
+    await saveLeagues(updatedLeagues);
     setSelectedLeague(updatedLeague);
     setShowEditDialog(false);
     toast.success('Spieler aktualisiert');
   };
 
-  const handleDeletePlayer = (playerId: string) => {
+  const handleDeletePlayer = async (playerId: string) => {
     if (!selectedLeague) return;
 
     const updatedStats = selectedLeague.playerStats.filter(s => s.player.id !== playerId);
@@ -161,12 +171,12 @@ const Leagues = () => {
     const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
     
     setLeagues(updatedLeagues);
-    saveLeagues(updatedLeagues);
+    await saveLeagues(updatedLeagues);
     setSelectedLeague(updatedLeague);
     toast.success('Spieler entfernt');
   };
 
-  const handleAddPlayer = () => {
+  const handleAddPlayer = async () => {
     if (!selectedLeague || !newPlayerName.trim()) return;
 
     const newPlayer: Player = {
@@ -193,7 +203,7 @@ const Leagues = () => {
     const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
     
     setLeagues(updatedLeagues);
-    saveLeagues(updatedLeagues);
+    await saveLeagues(updatedLeagues);
     setSelectedLeague(updatedLeague);
     setNewPlayerName('');
     setShowAddPlayer(false);
@@ -221,6 +231,17 @@ const Leagues = () => {
     if (rank === 3) return "bg-bronze/10 border-bronze/30";
     return "";
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-6 md:py-8">
+          <p className="text-muted-foreground text-center py-16">Lade Ligen...</p>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

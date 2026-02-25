@@ -1,8 +1,8 @@
 import { League, PlayerStats, Player } from '@/types';
-import { loadLeagues, saveLeagues } from '@/lib/storage';
+import { supabase } from '@/integrations/supabase/client';
 
-const SEED_KEY_ERWACHSENE = 'kicker_seed_2026_v2';
-const SEED_KEY_JUGEND = 'kicker_seed_jugend_2026';
+const SEED_KEY_ERWACHSENE = 'kicker_seed_2026_sb_v1';
+const SEED_KEY_JUGEND = 'kicker_seed_jugend_2026_sb_v1';
 
 function createPlayer(name: string): Player {
   return { id: crypto.randomUUID(), name };
@@ -28,7 +28,40 @@ function createStatFromPDF(
   };
 }
 
-export function seedLeague2026(): void {
+async function seedLeagueToSupabase(league: League): Promise<void> {
+  const { error: leagueError } = await supabase.from('leagues').insert({
+    id: league.id,
+    name: league.name,
+    year: league.year,
+    created_at: league.createdAt,
+  });
+  if (leagueError) {
+    console.error('Failed to seed league:', leagueError);
+    return;
+  }
+
+  if (league.playerStats.length > 0) {
+    const statsInserts = league.playerStats.map(s => ({
+      league_id: league.id,
+      player_id: s.player.id,
+      player_name: s.player.name,
+      wins: s.wins,
+      draws: s.draws,
+      losses: s.losses,
+      goals_for: s.goalsFor,
+      goals_against: s.goalsAgainst,
+      points: s.points,
+      points_against: s.pointsAgainst,
+      goal_difference: s.goalDifference,
+      championships: s.championships ?? 0,
+      vice_championships: s.viceChampionships ?? 0,
+    }));
+    const { error } = await supabase.from('player_stats').insert(statsInserts);
+    if (error) console.error('Failed to seed player_stats:', error);
+  }
+}
+
+export async function seedLeague2026(): Promise<void> {
   if (localStorage.getItem(SEED_KEY_ERWACHSENE)) return;
 
   const league: League = {
@@ -51,13 +84,11 @@ export function seedLeague2026(): void {
     createdAt: '2026-01-16T00:00:00.000Z',
   };
 
-  const leagues = loadLeagues();
-  leagues.push(league);
-  saveLeagues(leagues);
+  await seedLeagueToSupabase(league);
   localStorage.setItem(SEED_KEY_ERWACHSENE, 'true');
 }
 
-export function seedLeagueJugend2026(): void {
+export async function seedLeagueJugend2026(): Promise<void> {
   if (localStorage.getItem(SEED_KEY_JUGEND)) return;
 
   const league: League = {
@@ -79,8 +110,6 @@ export function seedLeagueJugend2026(): void {
     createdAt: '2026-01-16T00:00:00.000Z',
   };
 
-  const leagues = loadLeagues();
-  leagues.push(league);
-  saveLeagues(leagues);
+  await seedLeagueToSupabase(league);
   localStorage.setItem(SEED_KEY_JUGEND, 'true');
 }

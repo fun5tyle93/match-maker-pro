@@ -23,8 +23,6 @@ import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 import {
   loadCurrentSession,
   saveCurrentSession,
-  loadSessions,
-  saveSessions,
   loadLeagues,
   saveLeagues,
   saveToHistory,
@@ -39,19 +37,29 @@ const Training = () => {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [expandedRounds, setExpandedRounds] = useState<number[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedSession = loadCurrentSession();
-    if (savedSession) {
-      setSession(savedSession);
-      setPlayers(savedSession.players);
-      // Expand first incomplete round
-      const firstIncompleteRound = savedSession.matches.find(m => !m.isCompleted)?.round;
-      if (firstIncompleteRound) {
-        setExpandedRounds([firstIncompleteRound]);
+    const init = async () => {
+      try {
+        const savedSession = await loadCurrentSession();
+        if (savedSession) {
+          setSession(savedSession);
+          setPlayers(savedSession.players);
+          const firstIncompleteRound = savedSession.matches.find(m => !m.isCompleted)?.round;
+          if (firstIncompleteRound) {
+            setExpandedRounds([firstIncompleteRound]);
+          }
+        }
+        setLeagues(await loadLeagues());
+      } catch (err) {
+        console.error('Failed to load data:', err);
+        toast.error('Fehler beim Laden der Daten');
+      } finally {
+        setLoading(false);
       }
-    }
-    setLeagues(loadLeagues());
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -94,7 +102,6 @@ const Training = () => {
     setSession(newSession);
     setExpandedRounds([1]);
     
-    // Calculate max rounds info
     const maxRounds = players.length - 1;
     toast.success(`${matches.length} Spiele in ${roundCount} Runden generiert (Round-Robin: max ${maxRounds} Runden pro Durchgang)`);
   };
@@ -111,7 +118,6 @@ const Training = () => {
     setSession({ ...session, matches: updatedMatches });
     toast.success('Ergebnis gespeichert');
 
-    // Check if round is complete and expand next
     const match = session.matches.find(m => m.id === matchId);
     if (match) {
       const roundMatches = updatedMatches.filter(m => m.round === match.round);
@@ -136,12 +142,11 @@ const Training = () => {
     setShowTransferDialog(true);
   };
 
-  const handleTransferResults = (leagueIds: string[], nameMatches: Map<string, string>) => {
+  const handleTransferResults = async (leagueIds: string[], nameMatches: Map<string, string>) => {
     if (!session) return;
 
     const stats = calculatePlayerStats(session.players, session.matches);
     
-    // Find 1st and 2nd place for championship tracking
     const firstPlace = stats[0]?.player.name;
     const secondPlace = stats[1]?.player.name;
     
@@ -151,7 +156,6 @@ const Training = () => {
       const updatedStats = [...league.playerStats];
       
       stats.forEach(stat => {
-        // Check if there's a name match mapping
         const mappedName = nameMatches.get(stat.player.name);
         const searchName = mappedName || stat.player.name;
         
@@ -160,7 +164,6 @@ const Training = () => {
         );
 
         if (existingIndex >= 0) {
-          // Update existing player
           const existing = updatedStats[existingIndex];
           updatedStats[existingIndex] = {
             ...existing,
@@ -172,12 +175,10 @@ const Training = () => {
             points: existing.points + stat.points,
             pointsAgainst: existing.pointsAgainst + stat.pointsAgainst,
             goalDifference: existing.goalDifference + stat.goalDifference,
-            // Update championships
             championships: (existing.championships || 0) + (stat.player.name === firstPlace ? 1 : 0),
             viceChampionships: (existing.viceChampionships || 0) + (stat.player.name === secondPlace ? 1 : 0),
           };
         } else {
-          // Add new player
           updatedStats.push({
             ...stat,
             championships: stat.player.name === firstPlace ? 1 : 0,
@@ -186,7 +187,6 @@ const Training = () => {
         }
       });
 
-      // Resort standings
       updatedStats.sort((a, b) => {
         if (b.points !== a.points) return b.points - a.points;
         if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
@@ -197,31 +197,24 @@ const Training = () => {
     });
 
     setLeagues(updatedLeagues);
-    saveLeagues(updatedLeagues);
+    await saveLeagues(updatedLeagues);
 
-    // Save completed session with transferred leagues info
     const completedSession: TrainingSession = { 
       ...session, 
       isCompleted: true,
       transferredToLeagues: leagueIds,
     };
     
-    // Save to history
-    saveToHistory(completedSession);
+    await saveToHistory(completedSession);
     
-    // Also save to sessions for backward compatibility
-    const sessions = loadSessions();
-    saveSessions([...sessions, completedSession]);
-    
-    // Clear current session
-    saveCurrentSession(null);
+    await saveCurrentSession(null);
     setSession(null);
     setPlayers([]);
 
     toast.success(`Ergebnisse zu ${leagueIds.length} Liga(en) übertragen`);
   };
 
-  const handleCreateLeague = (name: string) => {
+  const handleCreateLeague = async (name: string) => {
     const newLeague: League = {
       id: crypto.randomUUID(),
       name,
@@ -232,12 +225,12 @@ const Training = () => {
     
     const updatedLeagues = [...leagues, newLeague];
     setLeagues(updatedLeagues);
-    saveLeagues(updatedLeagues);
+    await saveLeagues(updatedLeagues);
     toast.success(`Liga "${name}" erstellt`);
   };
 
-  const handleResetSession = () => {
-    saveCurrentSession(null);
+  const handleResetSession = async () => {
+    await saveCurrentSession(null);
     setSession(null);
     setPlayers([]);
     toast.info('Trainingsabend zurückgesetzt');
@@ -261,6 +254,17 @@ const Training = () => {
     : {};
 
   const allMatchesComplete = session?.matches.every(m => m.isCompleted) ?? false;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-6 md:py-8">
+          <p className="text-muted-foreground text-center py-16">Lade Daten...</p>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
