@@ -32,10 +32,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { TrainingSession, Match } from '@/types';
 import { loadHistory, deleteFromHistory, saveToHistory } from '@/lib/storage';
+import { useAuth } from '@/contexts/AuthContext';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 
 const History = () => {
+  const { isAdmin } = useAuth();
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<TrainingSession | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
@@ -188,14 +190,16 @@ const History = () => {
                               <span className="font-semibold">
                                 {session.name || formatDate(session.date)}
                               </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => startEditingName(session)}
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </Button>
+                              {isAdmin && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => startEditingName(session)}
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </Button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -259,30 +263,32 @@ const History = () => {
                           </DropdownMenuContent>
                         </DropdownMenu>
                         
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Training löschen?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Das Training vom {formatShortDate(session.date)} wird unwiderruflich aus der Historie gelöscht.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDelete(session.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Löschen
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        {isAdmin && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Training löschen?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Das Training vom {formatShortDate(session.date)} wird unwiderruflich aus der Historie gelöscht.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(session.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Löschen
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                     </div>
                   </CardContent>
