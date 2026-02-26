@@ -1,13 +1,23 @@
-import { NavLink as RouterNavLink } from 'react-router-dom';
-import { Trophy, Calendar, Home, History } from 'lucide-react';
+import { NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
+import { Trophy, Calendar, Home, History, LogOut, LogIn } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TippKickBall } from './TippKickBall';
 import tkc71Logo from '@/assets/tkc71-logo.jpeg';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 export function Header() {
+  const { isAdmin, signOut } = useAuth();
+  const navigate = useNavigate();
   const linkClass = "flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-200 text-sm";
   const activeClass = "bg-primary/20 text-primary";
   const inactiveClass = "text-muted-foreground hover:text-foreground hover:bg-secondary";
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success('Abgemeldet');
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-lg">
@@ -57,6 +67,30 @@ export function Header() {
               <Trophy className="w-4 h-4" />
               <span className="hidden sm:inline">Ligen</span>
             </RouterNavLink>
+
+            {isAdmin ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSignOut}
+                className="gap-2 text-muted-foreground hover:text-foreground ml-1"
+                title="Abmelden"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Abmelden</span>
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/admin')}
+                className="gap-2 text-muted-foreground hover:text-foreground ml-1"
+                title="Admin-Login"
+              >
+                <LogIn className="w-4 h-4" />
+                <span className="hidden sm:inline text-xs">Admin</span>
+              </Button>
+            )}
           </nav>
         </div>
       </div>

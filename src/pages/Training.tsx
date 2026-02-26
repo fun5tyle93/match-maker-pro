@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 import { generatePairings, calculatePlayerStats } from '@/lib/pairingGenerator';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 import {
@@ -31,6 +32,7 @@ import { cn } from '@/lib/utils';
 
 const Training = () => {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [session, setSession] = useState<TrainingSession | null>(null);
   const [matchesPerPairing, setMatchesPerPairing] = useState(1);
@@ -275,7 +277,7 @@ const Training = () => {
           <h1 className="font-display text-2xl md:text-3xl">
             {session ? 'Trainingsabend' : 'Neues Training'}
           </h1>
-          {session && (
+          {session && isAdmin && (
             <div className="flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -311,45 +313,57 @@ const Training = () => {
 
         {!session ? (
           <div className="space-y-6 max-w-2xl mx-auto">
-            <PlayerInput
-              players={players}
-              onAddPlayer={handleAddPlayer}
-              onRemovePlayer={handleRemovePlayer}
-            />
+            {isAdmin ? (
+              <>
+                <PlayerInput
+                  players={players}
+                  onAddPlayer={handleAddPlayer}
+                  onRemovePlayer={handleRemovePlayer}
+                />
 
-            <Card className="animate-fade-in">
-              <CardHeader>
-                <CardTitle>Einstellungen</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="matchesPerPairing">Spiele pro Paarung (Durchgänge)</Label>
-                  <Input
-                    id="matchesPerPairing"
-                    type="number"
-                    min="1"
-                    max="4"
-                    value={matchesPerPairing}
-                    onChange={(e) => setMatchesPerPairing(Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))}
-                    className="mt-1 w-24"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Round-Robin: Jeder gegen jeden. Bei {players.length} Spielern = {Math.max(0, players.length - 1)} Runden pro Durchgang.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+                <Card className="animate-fade-in">
+                  <CardHeader>
+                    <CardTitle>Einstellungen</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label htmlFor="matchesPerPairing">Spiele pro Paarung (Durchgänge)</Label>
+                      <Input
+                        id="matchesPerPairing"
+                        type="number"
+                        min="1"
+                        max="4"
+                        value={matchesPerPairing}
+                        onChange={(e) => setMatchesPerPairing(Math.max(1, Math.min(4, parseInt(e.target.value) || 1)))}
+                        className="mt-1 w-24"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Round-Robin: Jeder gegen jeden. Bei {players.length} Spielern = {Math.max(0, players.length - 1)} Runden pro Durchgang.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <Button
-              variant="hero"
-              size="xl"
-              className="w-full gap-2"
-              onClick={handleStartSession}
-              disabled={players.length < 2}
-            >
-              <Play className="w-5 h-5" />
-              Training starten
-            </Button>
+                <Button
+                  variant="hero"
+                  size="xl"
+                  className="w-full gap-2"
+                  onClick={handleStartSession}
+                  disabled={players.length < 2}
+                >
+                  <Play className="w-5 h-5" />
+                  Training starten
+                </Button>
+              </>
+            ) : (
+              <Card className="animate-fade-in">
+                <CardContent className="py-16 text-center">
+                  <Play className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
+                  <p className="text-muted-foreground mb-2">Kein aktives Training</p>
+                  <p className="text-sm text-muted-foreground">Bitte als Admin einloggen, um ein Training zu starten.</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -403,7 +417,7 @@ const Training = () => {
                 );
               })}
 
-              {allMatchesComplete && (
+              {allMatchesComplete && isAdmin && (
                 <Button
                   variant="accent"
                   size="xl"

@@ -32,10 +32,12 @@ import {
 import { Label } from '@/components/ui/label';
 import { League, PlayerStats, Player } from '@/types';
 import { loadLeagues, saveLeagues } from '@/lib/storage';
+import { useAuth } from '@/contexts/AuthContext';
 import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 
 const Leagues = () => {
+  const { isAdmin } = useAuth();
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [newLeagueName, setNewLeagueName] = useState('');
@@ -287,7 +289,7 @@ const Leagues = () => {
                   </p>
                 )}
 
-                {showNewLeague ? (
+                {isAdmin && (showNewLeague ? (
                   <div className="space-y-2 pt-2">
                     <Input
                       placeholder="Liganame..."
@@ -326,7 +328,7 @@ const Leagues = () => {
                     <Plus className="w-4 h-4 mr-2" />
                     Neue Liga
                   </Button>
-                )}
+                ))}
               </CardContent>
             </Card>
           </div>
@@ -346,14 +348,16 @@ const Leagues = () => {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowAddPlayer(true)}
-                        >
-                          <UserPlus className="w-4 h-4 mr-2" />
-                          Spieler
-                        </Button>
+                        {isAdmin && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowAddPlayer(true)}
+                          >
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            Spieler
+                          </Button>
+                        )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="icon">
@@ -377,30 +381,32 @@ const Leagues = () => {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="icon">
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Liga löschen?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Diese Aktion kann nicht rückgängig gemacht werden. Alle Daten der Liga "{selectedLeague.name}" werden unwiderruflich gelöscht.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteLeague(selectedLeague.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Löschen
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        {isAdmin && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="outline" size="icon">
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Liga löschen?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Diese Aktion kann nicht rückgängig gemacht werden. Alle Daten der Liga "{selectedLeague.name}" werden unwiderruflich gelöscht.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteLeague(selectedLeague.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Löschen
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
@@ -493,39 +499,41 @@ const Leagues = () => {
                                   })()}
                                 </td>
                                 <td className="py-3 px-2 text-right">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleEditPlayer(stat)}
-                                    >
-                                      <Pencil className="w-4 h-4" />
-                                    </Button>
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="sm">
-                                          <Trash2 className="w-4 h-4 text-destructive" />
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Spieler entfernen?</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            "{stat.player.name}" wird aus der Liga entfernt.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={() => handleDeletePlayer(stat.player.id)}
-                                            className="bg-destructive text-destructive-foreground"
-                                          >
-                                            Entfernen
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </div>
+                                  {isAdmin && (
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleEditPlayer(stat)}
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                      </Button>
+                                      <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                          <Button variant="ghost" size="sm">
+                                            <Trash2 className="w-4 h-4 text-destructive" />
+                                          </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                            <AlertDialogTitle>Spieler entfernen?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                              "{stat.player.name}" wird aus der Liga entfernt.
+                                            </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                            <AlertDialogAction
+                                              onClick={() => handleDeletePlayer(stat.player.id)}
+                                              className="bg-destructive text-destructive-foreground"
+                                            >
+                                              Entfernen
+                                            </AlertDialogAction>
+                                          </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                      </AlertDialog>
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             ))}
