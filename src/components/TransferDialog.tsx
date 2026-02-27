@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Trophy, Plus, AlertCircle } from 'lucide-react';
+import { Check, Trophy, Plus, AlertCircle, Infinity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -181,7 +181,13 @@ export function TransferDialog({
                         : "border-border hover:border-primary/50"
                     )}
                   >
-                    <span className="font-medium">{league.name}</span>
+                    <span className="font-medium flex items-center gap-1">
+                      {league.isEternal && <Infinity className="w-3.5 h-3.5 text-accent shrink-0" />}
+                      {league.name}
+                      {league.isEternal && (
+                        <span className="text-xs text-muted-foreground ml-1">(Pkt + M)</span>
+                      )}
+                    </span>
                     {selectedLeagues.includes(league.id) && (
                       <Check className="w-5 h-5 text-primary" />
                     )}

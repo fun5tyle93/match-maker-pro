@@ -41,18 +41,21 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_eternal: boolean
           name: string
           year: number
         }
         Insert: {
           created_at?: string
           id?: string
+          is_eternal?: boolean
           name: string
           year: number
         }
         Update: {
           created_at?: string
           id?: string
+          is_eternal?: boolean
           name?: string
           year?: number
         }

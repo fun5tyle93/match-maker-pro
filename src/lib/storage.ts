@@ -9,6 +9,7 @@ function toLeague(row: any, statsRows: any[]): League {
     name: row.name,
     year: row.year,
     createdAt: row.created_at,
+    isEternal: row.is_eternal ?? false,
     playerStats: statsRows.map(toPlayerStats),
   };
 }
@@ -93,6 +94,7 @@ export async function saveLeagues(leagues: League[]): Promise<void> {
       name: league.name,
       year: league.year,
       created_at: league.createdAt,
+      is_eternal: league.isEternal ?? false,
     });
     if (leagueError) {
       console.error('Failed to insert league:', leagueError);

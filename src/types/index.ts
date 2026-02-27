@@ -45,6 +45,7 @@ export interface League {
   year: number;
   playerStats: PlayerStats[];
   createdAt: string;
+  isEternal?: boolean;
 }
 
 export interface NameMatch {

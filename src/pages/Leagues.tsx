@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trophy, Trash2, Calendar, Download, FileSpreadsheet, FileText, Pencil, Save, X, UserPlus, Medal, Award } from 'lucide-react';
+import { Plus, Trophy, Trash2, Calendar, Download, FileSpreadsheet, FileText, Pencil, Save, X, UserPlus, Medal, Award, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EternalLeagueTable } from '@/components/EternalLeagueTable';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -111,7 +112,8 @@ const Leagues = () => {
   const handleEditPlayer = (stat: PlayerStats) => {
     setEditingPlayer(stat);
     setEditPlayerName(stat.player.name);
-    setEditWins(stat.wins);
+    // For eternal league: editWins stores the total points value
+    setEditWins(selectedLeague?.isEternal ? stat.points : stat.wins);
     setEditDraws(stat.draws);
     setEditLosses(stat.losses);
     setEditGoalsFor(stat.goalsFor);
@@ -126,6 +128,15 @@ const Leagues = () => {
 
     const updatedStats = selectedLeague.playerStats.map(s => {
       if (s.player.id === editingPlayer.player.id) {
+        if (selectedLeague.isEternal) {
+          // Eternal league: editWins holds total points, editChampionships holds championships
+          return {
+            ...s,
+            player: { ...s.player, name: editPlayerName.trim() || s.player.name },
+            points: editWins,
+            championships: editChampionships,
+          };
+        }
         const points = editWins * 2 + editDraws;
         const pointsAgainst = editLosses * 2 + editDraws;
         return {
@@ -272,11 +283,14 @@ const Leagues = () => {
                     className={cn(
                       "w-full text-left p-3 rounded-lg border transition-all duration-200",
                       selectedLeague?.id === league.id
-                        ? "border-primary bg-primary/10"
+                        ? league.isEternal ? "border-accent bg-accent/10" : "border-primary bg-primary/10"
                         : "border-border hover:border-primary/50"
                     )}
                   >
-                    <p className="font-semibold">{league.name}</p>
+                    <p className="font-semibold flex items-center gap-1">
+                      {league.isEternal && <Star className="w-3.5 h-3.5 text-accent shrink-0" />}
+                      {league.name}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {league.playerStats.length} Spieler
                     </p>
@@ -412,7 +426,15 @@ const Leagues = () => {
                   </CardHeader>
                 </Card>
 
-                {/* Enhanced Standings Table */}
+                {/* Standings Table — eternal or normal */}
+                {selectedLeague.isEternal ? (
+                  <EternalLeagueTable
+                    stats={selectedLeague.playerStats}
+                    isAdmin={isAdmin}
+                    onEdit={handleEditPlayer}
+                    onDelete={handleDeletePlayer}
+                  />
+                ) : (
                 <Card className="animate-fade-in">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -543,6 +565,7 @@ const Leagues = () => {
                     )}
                   </CardContent>
                 </Card>
+                )}
               </div>
             ) : (
               <Card className="animate-fade-in">
@@ -574,86 +597,119 @@ const Leagues = () => {
             />
           </div>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="wins">Siege</Label>
-                <Input
-                  id="wins"
-                  type="number"
-                  min="0"
-                  value={editWins}
-                  onChange={(e) => setEditWins(parseInt(e.target.value) || 0)}
-                />
+            {selectedLeague?.isEternal ? (
+              /* Eternal league: only points + championships */
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="eternalPoints" className="flex items-center gap-1">
+                    <Star className="w-4 h-4 text-accent" /> Punkte (gesamt)
+                  </Label>
+                  <Input
+                    id="eternalPoints"
+                    type="number"
+                    min="0"
+                    value={editWins}
+                    onChange={(e) => setEditWins(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="eternalChamp" className="flex items-center gap-1">
+                    <Medal className="w-4 h-4 text-gold" /> Meisterschaften
+                  </Label>
+                  <Input
+                    id="eternalChamp"
+                    type="number"
+                    min="0"
+                    value={editChampionships}
+                    onChange={(e) => setEditChampionships(parseInt(e.target.value) || 0)}
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="draws">Unentschieden</Label>
-                <Input
-                  id="draws"
-                  type="number"
-                  min="0"
-                  value={editDraws}
-                  onChange={(e) => setEditDraws(parseInt(e.target.value) || 0)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="losses">Niederlagen</Label>
-                <Input
-                  id="losses"
-                  type="number"
-                  min="0"
-                  value={editLosses}
-                  onChange={(e) => setEditLosses(parseInt(e.target.value) || 0)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="goalsFor">Tore geschossen</Label>
-                <Input
-                  id="goalsFor"
-                  type="number"
-                  min="0"
-                  value={editGoalsFor}
-                  onChange={(e) => setEditGoalsFor(parseInt(e.target.value) || 0)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="goalsAgainst">Tore erhalten</Label>
-                <Input
-                  id="goalsAgainst"
-                  type="number"
-                  min="0"
-                  value={editGoalsAgainst}
-                  onChange={(e) => setEditGoalsAgainst(parseInt(e.target.value) || 0)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="championships" className="flex items-center gap-1">
-                  <Medal className="w-4 h-4 text-gold" /> Meisterschaften
-                </Label>
-                <Input
-                  id="championships"
-                  type="number"
-                  min="0"
-                  value={editChampionships}
-                  onChange={(e) => setEditChampionships(parseInt(e.target.value) || 0)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="viceChampionships" className="flex items-center gap-1">
-                  <Award className="w-4 h-4 text-silver" /> Vizemeisterschaften
-                </Label>
-                <Input
-                  id="viceChampionships"
-                  type="number"
-                  min="0"
-                  value={editViceChampionships}
-                  onChange={(e) => setEditViceChampionships(parseInt(e.target.value) || 0)}
-                />
-              </div>
-            </div>
+            ) : (
+              /* Normal league: full edit */
+              <>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="wins">Siege</Label>
+                    <Input
+                      id="wins"
+                      type="number"
+                      min="0"
+                      value={editWins}
+                      onChange={(e) => setEditWins(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="draws">Unentschieden</Label>
+                    <Input
+                      id="draws"
+                      type="number"
+                      min="0"
+                      value={editDraws}
+                      onChange={(e) => setEditDraws(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="losses">Niederlagen</Label>
+                    <Input
+                      id="losses"
+                      type="number"
+                      min="0"
+                      value={editLosses}
+                      onChange={(e) => setEditLosses(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="goalsFor">Tore geschossen</Label>
+                    <Input
+                      id="goalsFor"
+                      type="number"
+                      min="0"
+                      value={editGoalsFor}
+                      onChange={(e) => setEditGoalsFor(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="goalsAgainst">Tore erhalten</Label>
+                    <Input
+                      id="goalsAgainst"
+                      type="number"
+                      min="0"
+                      value={editGoalsAgainst}
+                      onChange={(e) => setEditGoalsAgainst(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="championships" className="flex items-center gap-1">
+                      <Medal className="w-4 h-4 text-gold" /> Meisterschaften
+                    </Label>
+                    <Input
+                      id="championships"
+                      type="number"
+                      min="0"
+                      value={editChampionships}
+                      onChange={(e) => setEditChampionships(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="viceChampionships" className="flex items-center gap-1">
+                      <Award className="w-4 h-4 text-silver" /> Vizemeisterschaften
+                    </Label>
+                    <Input
+                      id="viceChampionships"
+                      type="number"
+                      min="0"
+                      value={editViceChampionships}
+                      onChange={(e) => setEditViceChampionships(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
