@@ -156,44 +156,82 @@ const Training = () => {
       if (!leagueIds.includes(league.id)) return league;
 
       const updatedStats = [...league.playerStats];
-      
-      stats.forEach(stat => {
-        const mappedName = nameMatches.get(stat.player.name);
-        const searchName = mappedName || stat.player.name;
-        
-        const existingIndex = updatedStats.findIndex(
-          s => s.player.name.toLowerCase() === searchName.toLowerCase()
-        );
 
-        if (existingIndex >= 0) {
-          const existing = updatedStats[existingIndex];
-          updatedStats[existingIndex] = {
-            ...existing,
-            wins: existing.wins + stat.wins,
-            draws: existing.draws + stat.draws,
-            losses: existing.losses + stat.losses,
-            goalsFor: existing.goalsFor + stat.goalsFor,
-            goalsAgainst: existing.goalsAgainst + stat.goalsAgainst,
-            points: existing.points + stat.points,
-            pointsAgainst: existing.pointsAgainst + stat.pointsAgainst,
-            goalDifference: existing.goalDifference + stat.goalDifference,
-            championships: (existing.championships || 0) + (stat.player.name === firstPlace ? 1 : 0),
-            viceChampionships: (existing.viceChampionships || 0) + (stat.player.name === secondPlace ? 1 : 0),
-          };
-        } else {
-          updatedStats.push({
-            ...stat,
-            championships: stat.player.name === firstPlace ? 1 : 0,
-            viceChampionships: stat.player.name === secondPlace ? 1 : 0,
-          });
-        }
-      });
+      if (league.isEternal) {
+        // Eternal league: only add points to winner, +1 championship for 1st place
+        stats.forEach(stat => {
+          const mappedName = nameMatches.get(stat.player.name);
+          const searchName = mappedName || stat.player.name;
 
-      updatedStats.sort((a, b) => {
-        if (b.points !== a.points) return b.points - a.points;
-        if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
-        return b.goalsFor - a.goalsFor;
-      });
+          const existingIndex = updatedStats.findIndex(
+            s => s.player.name.toLowerCase() === searchName.toLowerCase()
+          );
+
+          const isChamp = stat.player.name === firstPlace;
+
+          if (existingIndex >= 0) {
+            const existing = updatedStats[existingIndex];
+            updatedStats[existingIndex] = {
+              ...existing,
+              points: existing.points + stat.points,
+              championships: (existing.championships || 0) + (isChamp ? 1 : 0),
+            };
+          } else {
+            updatedStats.push({
+              ...stat,
+              wins: 0, draws: 0, losses: 0,
+              goalsFor: 0, goalsAgainst: 0,
+              pointsAgainst: 0, goalDifference: 0,
+              championships: isChamp ? 1 : 0,
+              viceChampionships: 0,
+            });
+          }
+        });
+
+        updatedStats.sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          return (b.championships ?? 0) - (a.championships ?? 0);
+        });
+      } else {
+        // Normal league: full stats transfer
+        stats.forEach(stat => {
+          const mappedName = nameMatches.get(stat.player.name);
+          const searchName = mappedName || stat.player.name;
+
+          const existingIndex = updatedStats.findIndex(
+            s => s.player.name.toLowerCase() === searchName.toLowerCase()
+          );
+
+          if (existingIndex >= 0) {
+            const existing = updatedStats[existingIndex];
+            updatedStats[existingIndex] = {
+              ...existing,
+              wins: existing.wins + stat.wins,
+              draws: existing.draws + stat.draws,
+              losses: existing.losses + stat.losses,
+              goalsFor: existing.goalsFor + stat.goalsFor,
+              goalsAgainst: existing.goalsAgainst + stat.goalsAgainst,
+              points: existing.points + stat.points,
+              pointsAgainst: existing.pointsAgainst + stat.pointsAgainst,
+              goalDifference: existing.goalDifference + stat.goalDifference,
+              championships: (existing.championships || 0) + (stat.player.name === firstPlace ? 1 : 0),
+              viceChampionships: (existing.viceChampionships || 0) + (stat.player.name === secondPlace ? 1 : 0),
+            };
+          } else {
+            updatedStats.push({
+              ...stat,
+              championships: stat.player.name === firstPlace ? 1 : 0,
+              viceChampionships: stat.player.name === secondPlace ? 1 : 0,
+            });
+          }
+        });
+
+        updatedStats.sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+          return b.goalsFor - a.goalsFor;
+        });
+      }
 
       return { ...league, playerStats: updatedStats };
     });

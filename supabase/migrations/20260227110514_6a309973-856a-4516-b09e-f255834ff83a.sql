@@ -1,0 +1,1 @@
+ALTER TABLE public.leagues ADD COLUMN IF NOT EXISTS is_eternal BOOLEAN NOT NULL DEFAULT false;
