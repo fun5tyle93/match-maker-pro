@@ -1,4 +1,4 @@
-import { Star, Medal, Pencil, Trash2 } from 'lucide-react';
+import { Star, Pencil, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -62,10 +62,9 @@ export function EternalLeagueTable({ stats, isAdmin, onEdit, onDelete }: Eternal
                 <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
                   <th className="text-left py-3 px-2">#</th>
                   <th className="text-left py-3 px-2">Spieler</th>
-                  <th className="text-center py-3 px-2">Punkte</th>
-                  <th className="text-center py-3 px-2" title="Meisterschaften">
-                    <Medal className="w-4 h-4 inline text-gold" />
-                  </th>
+                  <th className="text-center py-3 px-2">Pkt+</th>
+                  <th className="text-center py-3 px-2">Pkt−</th>
+                  <th className="text-center py-3 px-2">M</th>
                   {isAdmin && <th className="text-right py-3 px-2"></th>}
                 </tr>
               </thead>
@@ -95,6 +94,9 @@ export function EternalLeagueTable({ stats, isAdmin, onEdit, onDelete }: Eternal
                     </td>
                     <td className="py-2 px-2 text-center font-mono font-bold text-primary text-base">
                       {stat.points.toLocaleString('de-DE')}
+                    </td>
+                    <td className="py-2 px-2 text-center font-mono text-muted-foreground text-base">
+                      {stat.pointsAgainst.toLocaleString('de-DE')}
                     </td>
                     <td className="py-2 px-2 text-center font-mono font-bold text-gold">
                       {(stat.championships ?? 0) > 0 ? stat.championships : '—'}

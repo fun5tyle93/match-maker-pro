@@ -58,6 +58,7 @@ const Leagues = () => {
   const [editGoalsAgainst, setEditGoalsAgainst] = useState(0);
   const [editChampionships, setEditChampionships] = useState(0);
   const [editViceChampionships, setEditViceChampionships] = useState(0);
+  const [editPointsAgainst, setEditPointsAgainst] = useState(0);
 
   useEffect(() => {
     const init = async () => {
@@ -114,6 +115,7 @@ const Leagues = () => {
     setEditPlayerName(stat.player.name);
     // For eternal league: editWins stores the total points value
     setEditWins(selectedLeague?.isEternal ? stat.points : stat.wins);
+    setEditPointsAgainst(stat.pointsAgainst);
     setEditDraws(stat.draws);
     setEditLosses(stat.losses);
     setEditGoalsFor(stat.goalsFor);
@@ -129,11 +131,11 @@ const Leagues = () => {
     const updatedStats = selectedLeague.playerStats.map(s => {
       if (s.player.id === editingPlayer.player.id) {
         if (selectedLeague.isEternal) {
-          // Eternal league: editWins holds total points, editChampionships holds championships
           return {
             ...s,
             player: { ...s.player, name: editPlayerName.trim() || s.player.name },
             points: editWins,
+            pointsAgainst: editPointsAgainst,
             championships: editChampionships,
           };
         }
@@ -598,11 +600,11 @@ const Leagues = () => {
           </div>
           <div className="grid gap-4 py-4">
             {selectedLeague?.isEternal ? (
-              /* Eternal league: only points + championships */
-              <div className="grid grid-cols-2 gap-4">
+              /* Eternal league: points+, points-, championships */
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="eternalPoints" className="flex items-center gap-1">
-                    <Star className="w-4 h-4 text-accent" /> Punkte (gesamt)
+                    <Star className="w-4 h-4 text-accent" /> Pkt+
                   </Label>
                   <Input
                     id="eternalPoints"
@@ -613,8 +615,18 @@ const Leagues = () => {
                   />
                 </div>
                 <div>
+                  <Label htmlFor="eternalPointsAgainst">Pkt−</Label>
+                  <Input
+                    id="eternalPointsAgainst"
+                    type="number"
+                    min="0"
+                    value={editPointsAgainst}
+                    onChange={(e) => setEditPointsAgainst(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+                <div>
                   <Label htmlFor="eternalChamp" className="flex items-center gap-1">
-                    <Medal className="w-4 h-4 text-gold" /> Meisterschaften
+                    <Medal className="w-4 h-4 text-gold" /> M
                   </Label>
                   <Input
                     id="eternalChamp"
