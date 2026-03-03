@@ -158,7 +158,7 @@ const Training = () => {
       const updatedStats = [...league.playerStats];
 
       if (league.isEternal) {
-        // Eternal league: only add points to winner, +1 championship for 1st place
+        // Eternal league: add points + pointsAgainst like normal leagues, +1 championship for 1st place
         stats.forEach(stat => {
           const mappedName = nameMatches.get(stat.player.name);
           const searchName = mappedName || stat.player.name;
@@ -174,6 +174,7 @@ const Training = () => {
             updatedStats[existingIndex] = {
               ...existing,
               points: existing.points + stat.points,
+              pointsAgainst: (existing.pointsAgainst || 0) + stat.pointsAgainst,
               championships: (existing.championships || 0) + (isChamp ? 1 : 0),
             };
           } else {
@@ -181,7 +182,7 @@ const Training = () => {
               ...stat,
               wins: 0, draws: 0, losses: 0,
               goalsFor: 0, goalsAgainst: 0,
-              pointsAgainst: 0, goalDifference: 0,
+              goalDifference: 0,
               championships: isChamp ? 1 : 0,
               viceChampionships: 0,
             });
