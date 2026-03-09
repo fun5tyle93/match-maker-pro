@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
 import autoTable from 'jspdf-autotable';
 import { TrainingSession, League, Match } from '@/types';
 import { calculatePlayerStats } from './pairingGenerator';

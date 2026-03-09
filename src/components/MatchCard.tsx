@@ -31,6 +31,12 @@ export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber 
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && isValid) {
+      handleSave();
+    }
+  };
+
   const handleEdit = () => {
     setIsEditing(true);
   };
@@ -102,6 +108,7 @@ export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber 
                 inputMode="numeric"
                 value={homeScore}
                 onChange={(e) => setHomeScore(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-14 h-12 text-center text-xl font-bold"
                 disabled={!showInputs}
               />
@@ -112,6 +119,7 @@ export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber 
                 inputMode="numeric"
                 value={awayScore}
                 onChange={(e) => setAwayScore(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-14 h-12 text-center text-xl font-bold"
                 disabled={!showInputs}
               />
