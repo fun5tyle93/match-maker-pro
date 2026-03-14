@@ -8,6 +8,7 @@ import Training from "./pages/Training";
 import Leagues from "./pages/Leagues";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
+import Dokumentation from "./pages/Dokumentation";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./contexts/AuthContext";
 

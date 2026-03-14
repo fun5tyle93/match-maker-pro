@@ -1,5 +1,5 @@
 import { NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
-import { Trophy, Calendar, Home, History, LogOut, LogIn } from 'lucide-react';
+import { Trophy, Calendar, Home, History, LogOut, LogIn, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TippKickBall } from './TippKickBall';
 import tkc71Logo from '@/assets/tkc71-logo.jpeg';
