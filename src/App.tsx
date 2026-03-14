@@ -8,6 +8,7 @@ import Training from "./pages/Training";
 import Leagues from "./pages/Leagues";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
+import Dokumentation from "./pages/Dokumentation";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./contexts/AuthContext";
 
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/training" element={<Training />} />
             <Route path="/leagues" element={<Leagues />} />
             <Route path="/history" element={<History />} />
+            <Route path="/dokumentation" element={<Dokumentation />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
