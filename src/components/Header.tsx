@@ -67,6 +67,13 @@ export function Header() {
               <Trophy className="w-4 h-4" />
               <span className="hidden sm:inline">Ligen</span>
             </RouterNavLink>
+            <RouterNavLink
+              to="/dokumentation"
+              className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Doku</span>
+            </RouterNavLink>
 
             {isAdmin ? (
               <Button
