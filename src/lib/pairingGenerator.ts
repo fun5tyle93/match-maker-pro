@@ -14,8 +14,16 @@ function getMatchesPerRound(playerCount: number): number {
   return Math.floor(playerCount / 2);
 }
 
-// Round-Robin algorithm: generates pairings where each player plays against each other
-// Maximum rounds = players - 1 (or players if odd, since one pauses each round)
+/**
+ * Round-Robin Pairing Generator
+ *
+ * Goals:
+ *  1. Every player meets every other player exactly once per repetition (circle method).
+ *  2. Side (home = Weiß, away = Schwarz) is balanced as evenly as possible across the
+ *     entire session, taking both total count AND the last-used role into account.
+ *  3. Table assignment is randomized each round so that, over the session, every player
+ *     ends up on every table roughly equally often.
+ */
 export function generatePairings(
   players: Player[],
   matchesPerPairing: number = 1
@@ -26,90 +34,121 @@ export function generatePairings(
 
   const n = players.length;
   const isOdd = n % 2 === 1;
-  
-  // For round-robin: add a "bye" player if odd number
+
+  // Add a dummy "BYE" slot when player count is odd so the circle method works
   const allPlayers = isOdd ? [...players, { id: 'BYE', name: 'BYE' }] : [...players];
   const numPlayers = allPlayers.length;
-  const numRounds = numPlayers - 1; // Maximum rounds for round-robin
-  
+  const numRounds = numPlayers - 1;
+
   const matches: Match[] = [];
   const matchId = () => crypto.randomUUID();
-  
-  // Circle method for round-robin scheduling
+
+  // --- Tracking state for balanced side & table distribution ---
+  // whiteCount: how many times each player was home (= Weiß)
+  // lastRole:   the role a player had in the most recent game (to avoid streaks)
+  // tableCount: how many times each player appeared on each table index
+  const whiteCount: Record<string, number> = {};
+  const lastRole: Record<string, 'home' | 'away' | null> = {};
+  const tableCount: Record<string, Record<number, number>> = {};
+
+  const numTables = Math.floor(numPlayers / 2);
+
+  players.forEach(p => {
+    whiteCount[p.id] = 0;
+    lastRole[p.id] = null;
+    tableCount[p.id] = {};
+    for (let t = 0; t < numTables; t++) tableCount[p.id][t] = 0;
+  });
+
+  // Circle method: keep allPlayers[0] fixed, rotate the rest
   const fixed = allPlayers[0];
   const rotating = allPlayers.slice(1);
-  
-  // Track home/away counts per player to ensure fair distribution
-  const homeCount: Record<string, number> = {};
-  const awayCount: Record<string, number> = {};
-  const lastRole: Record<string, 'home' | 'away' | null> = {};
-  
-  players.forEach(p => {
-    homeCount[p.id] = 0;
-    awayCount[p.id] = 0;
-    lastRole[p.id] = null;
-  });
 
   for (let repetition = 0; repetition < matchesPerPairing; repetition++) {
     const rotatingCopy = [...rotating];
-    
+
     for (let round = 0; round < numRounds; round++) {
       const roundNumber = repetition * numRounds + round + 1;
       const roundPlayers = [fixed, ...rotatingCopy];
-      const roundMatches: { home: Player; away: Player }[] = [];
-      
+
+      // Build raw pairings for this round (circle method)
+      const rawPairs: [Player, Player][] = [];
       for (let i = 0; i < numPlayers / 2; i++) {
-        const player1 = roundPlayers[i];
-        const player2 = roundPlayers[numPlayers - 1 - i];
-        
-        // Skip matches involving the "bye" player
-        if (player1.id === 'BYE' || player2.id === 'BYE') continue;
-        
-        // Determine home/away based on fairness criteria:
-        // 1. Avoid consecutive same role
-        // 2. Balance total home/away counts
-        let home = player1;
-        let away = player2;
-        
-        const p1WasHome = lastRole[player1.id] === 'home';
-        const p2WasHome = lastRole[player2.id] === 'home';
-        const p1WasAway = lastRole[player1.id] === 'away';
-        const p2WasAway = lastRole[player2.id] === 'away';
-        
-        // If player1 was just home and player2 wasn't, swap
-        if (p1WasHome && !p2WasHome) {
-          home = player2;
-          away = player1;
-        }
-        // If player2 was just away and player1 wasn't, keep as is
-        else if (p2WasAway && !p1WasAway) {
-          home = player1;
-          away = player2;
-        }
-        // Otherwise balance by total counts
-        else if (homeCount[player1.id] > homeCount[player2.id]) {
-          home = player2;
-          away = player1;
-        } else if (homeCount[player2.id] > homeCount[player1.id]) {
-          home = player1;
-          away = player2;
-        }
-        // For repetitions, alternate based on repetition number
-        else if (repetition % 2 === 1) {
-          home = player2;
-          away = player1;
-        }
-        
-        roundMatches.push({ home, away });
+        const p1 = roundPlayers[i];
+        const p2 = roundPlayers[numPlayers - 1 - i];
+        if (p1.id === 'BYE' || p2.id === 'BYE') continue;
+        rawPairs.push([p1, p2]);
       }
-      
-      // Add matches and update tracking
-      roundMatches.forEach(({ home, away }) => {
-        homeCount[home.id]++;
-        awayCount[away.id]++;
+
+      // --- Assign sides (home = Weiß) fairly ---
+      // Scoring: prefer the player with fewer white games; break ties by last role.
+      const sidesAssigned: { home: Player; away: Player }[] = rawPairs.map(([p1, p2]) => {
+        // Score > 0 means p1 should be home, < 0 means p2 should be home
+        let score = whiteCount[p2.id] - whiteCount[p1.id]; // p1 home if p2 had more white
+
+        // Tiebreak by last role: prefer not repeating the same side
+        if (score === 0) {
+          const p1Bonus = lastRole[p1.id] === 'away' ? 1 : lastRole[p1.id] === 'home' ? -1 : 0;
+          const p2Bonus = lastRole[p2.id] === 'away' ? 1 : lastRole[p2.id] === 'home' ? -1 : 0;
+          score = p1Bonus - p2Bonus;
+        }
+
+        // Coin flip if still tied
+        if (score === 0) score = Math.random() < 0.5 ? 1 : -1;
+
+        return score > 0
+          ? { home: p1, away: p2 }
+          : { home: p2, away: p1 };
+      });
+
+      // --- Assign tables fairly via randomized scoring ---
+      // Create a shuffled list of available table indices [0, 1, 2, ...]
+      const tableIndices = shuffleArray(
+        Array.from({ length: sidesAssigned.length }, (_, i) => i)
+      );
+
+      // For each pair, find the table index where both players have played the least
+      // We use a greedy assignment on the shuffled indices to add randomness while
+      // still respecting the balance objective.
+      const usedTables = new Set<number>();
+      const assignedTables: number[] = new Array(sidesAssigned.length).fill(-1);
+
+      // Build a cost matrix: cost[pair][tableIdx] = sum of tableCount for both players
+      for (let pairIdx = 0; pairIdx < sidesAssigned.length; pairIdx++) {
+        const { home, away } = sidesAssigned[pairIdx];
+
+        // Among still-available tables, pick the one both players have visited least
+        let bestTable = -1;
+        let bestCost = Infinity;
+        // Shuffle candidate tables to break ties randomly
+        const candidates = shuffleArray(tableIndices.filter(t => !usedTables.has(t)));
+
+        for (const t of candidates) {
+          const cost =
+            (tableCount[home.id][t] ?? 0) +
+            (tableCount[away.id][t] ?? 0) +
+            Math.random() * 0.5; // small random jitter for ties
+          if (cost < bestCost) {
+            bestCost = cost;
+            bestTable = t;
+          }
+        }
+
+        assignedTables[pairIdx] = bestTable;
+        usedTables.add(bestTable);
+      }
+
+      // Commit matches and update trackers
+      sidesAssigned.forEach(({ home, away }, pairIdx) => {
+        const tableIdx = assignedTables[pairIdx];
+
+        whiteCount[home.id]++;
         lastRole[home.id] = 'home';
         lastRole[away.id] = 'away';
-        
+
+        if (tableCount[home.id][tableIdx] !== undefined) tableCount[home.id][tableIdx]++;
+        if (tableCount[away.id][tableIdx] !== undefined) tableCount[away.id][tableIdx]++;
+
         matches.push({
           id: matchId(),
           round: roundNumber,
@@ -120,16 +159,14 @@ export function generatePairings(
           isCompleted: false,
         });
       });
-      
-      // Rotate players (keep first fixed, rotate the rest)
+
+      // Rotate the circle (keep fixed[0], rotate rest)
       const last = rotatingCopy.pop()!;
       rotatingCopy.unshift(last);
     }
   }
 
-  // Calculate total rounds
   const totalRounds = numRounds * matchesPerPairing;
-
   return { matches, roundCount: totalRounds };
 }
 
