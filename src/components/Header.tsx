@@ -1,5 +1,5 @@
 import { NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
-import { Trophy, Calendar, Home, History, LogOut, LogIn, BookOpen } from 'lucide-react';
+import { Trophy, Calendar, Home, History, LogOut, LogIn, BookOpen, GitBranch } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TippKickBall } from './TippKickBall';
 import tkc71Logo from '@/assets/tkc71-logo.jpeg';
@@ -73,6 +73,13 @@ export function Header() {
             >
               <BookOpen className="w-4 h-4" />
               <span className="hidden sm:inline">Doku</span>
+            </RouterNavLink>
+            <RouterNavLink
+              to="/schweizer-system"
+              className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
+            >
+              <GitBranch className="w-4 h-4" />
+              <span className="hidden sm:inline">Schweizer</span>
             </RouterNavLink>
 
             {isAdmin ? (

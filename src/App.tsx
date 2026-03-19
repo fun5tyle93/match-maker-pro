@@ -9,6 +9,7 @@ import Leagues from "./pages/Leagues";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
 import Dokumentation from "./pages/Dokumentation";
+import SchweizSystem from "./pages/SchweizSystem";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./contexts/AuthContext";
 
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/leagues" element={<Leagues />} />
             <Route path="/history" element={<History />} />
             <Route path="/dokumentation" element={<Dokumentation />} />
+            <Route path="/schweizer-system" element={<SchweizSystem />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
