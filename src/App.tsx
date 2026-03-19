@@ -28,6 +28,7 @@ const App = () => (
             <Route path="/leagues" element={<Leagues />} />
             <Route path="/history" element={<History />} />
             <Route path="/dokumentation" element={<Dokumentation />} />
+            <Route path="/schweizer-system" element={<SchweizSystem />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
