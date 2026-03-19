@@ -74,6 +74,13 @@ export function Header() {
               <BookOpen className="w-4 h-4" />
               <span className="hidden sm:inline">Doku</span>
             </RouterNavLink>
+            <RouterNavLink
+              to="/schweizer-system"
+              className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
+            >
+              <GitBranch className="w-4 h-4" />
+              <span className="hidden sm:inline">Schweizer</span>
+            </RouterNavLink>
 
             {isAdmin ? (
               <Button
