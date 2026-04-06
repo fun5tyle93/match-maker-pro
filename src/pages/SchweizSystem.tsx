@@ -145,16 +145,19 @@ export default function SchweizSystem() {
     let newRounds: SwissRound[];
 
     if (s.config.refereeMode) {
-      const { pass1, pass2 } = generateRefereeRound(s.players, s.rounds, nextRoundNumber);
+      const { pass1, pass2, byePlayerId } = generateRefereeRound(s.players, s.rounds, nextRoundNumber);
+      // Attach byePlayerId to first pass
+      if (byePlayerId) pass1.byePlayerId = byePlayerId;
       newRounds = [...s.rounds, pass1, pass2];
       setExpandedRounds([`${nextRoundNumber}-1`]);
     } else {
-      const matches = generateSwissRoundMatches(s.players, s.rounds, nextRoundNumber);
+      const { matches, byePlayerId } = generateSwissRoundMatches(s.players, s.rounds, nextRoundNumber);
       const round: SwissRound = {
         roundNumber: nextRoundNumber,
         phase: 'swiss',
         matches,
         isCompleted: false,
+        byePlayerId,
       };
       newRounds = [...s.rounds, round];
       setExpandedRounds([`${nextRoundNumber}`]);
@@ -654,6 +657,16 @@ export default function SchweizSystem() {
                                     .map(id => session.players.find(p => p.id === id)?.name ?? id)
                                     .join(', ')}
                                 </span>
+                              </div>
+                            )}
+                            {segment.byePlayerId && (
+                              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm">
+                                <AlertCircle className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-muted-foreground">Spielfrei: </span>
+                                <span className="font-medium">
+                                  {session.players.find(p => p.id === segment.byePlayerId)?.name ?? '–'}
+                                </span>
+                                <span className="text-xs text-muted-foreground">(0 Punkte, 0 Tore)</span>
                               </div>
                             )}
                             {segment.matches.length === 0 ? (

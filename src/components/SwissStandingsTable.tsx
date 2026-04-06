@@ -51,8 +51,9 @@ export function SwissStandingsTable({
                   <th className="text-center py-2 px-2" title="Punkte">Pkt</th>
                   <th className="text-center py-2 px-2" title="Spiele">Sp</th>
                   <th className="text-center py-2 px-2" title="Ø Punkte / Spiel">Ø</th>
-                  <th className="text-center py-2 px-2" title="Buchholz-Zahl">BHZ</th>
+                  <th className="text-center py-2 px-2" title="Buchholz-Wert (Ø Gegnerpunkte, 0.0–2.0)">BHZ</th>
                   <th className="text-center py-2 px-2" title="Torverhältnis">±</th>
+                  <th className="text-center py-2 px-2" title="Spielfrei">Bye</th>
                 </tr>
               </thead>
               <tbody>
@@ -83,7 +84,7 @@ export function SwissStandingsTable({
                         {stat.avgPoints.toFixed(2)}
                       </td>
                       <td className="py-2 px-2 text-center font-mono text-muted-foreground">
-                        {stat.buchholz}
+                        {stat.buchholz.toFixed(2)}
                       </td>
                       <td className={cn(
                         'py-2 px-2 text-center font-mono font-bold',
@@ -92,6 +93,9 @@ export function SwissStandingsTable({
                         stat.goalDifference === 0 && 'text-muted-foreground',
                       )}>
                         {stat.goalDifference > 0 ? '+' : ''}{stat.goalDifference}
+                      </td>
+                      <td className="py-2 px-2 text-center text-muted-foreground">
+                        {stat.hasHadBye ? '✓' : '–'}
                       </td>
                     </tr>
                   );
@@ -103,8 +107,9 @@ export function SwissStandingsTable({
               <span>Pkt = Punkte</span>
               <span>Sp = Spiele</span>
               <span>Ø = Ø Pkt/Spiel</span>
-              <span>BHZ = Buchholz-Zahl</span>
+              <span>BHZ = Ø Gegnerpunkte (0–2)</span>
               <span>± = Tordifferenz</span>
+              <span>Bye = Spielfrei gehabt</span>
             </div>
           </div>
         )}
