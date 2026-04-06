@@ -19,6 +19,7 @@ export interface SwissPlayerStat {
   goalsFor: number;
   goalsAgainst: number;
   goalDifference: number;
+  /** Buchholz = average points of opponents (0.0–2.0) */
   buchholz: number;
   wins: number;
   draws: number;
@@ -26,6 +27,8 @@ export interface SwissPlayerStat {
   /** Average points per game (primary sort) */
   avgPoints: number;
   opponentIds: string[];
+  /** Whether this player already had a BYE */
+  hasHadBye: boolean;
   /** Round index when this player gets a BYE */
   byeRound?: number;
 }
@@ -39,13 +42,15 @@ export interface SwissRound {
   /** Player IDs acting as referees this pass (refereeMode only) */
   referees?: string[];
   isCompleted: boolean;
+  /** Player ID that has a BYE this round */
+  byePlayerId?: string;
 }
 
 export interface PlayoffMatch {
   id: string;
-  round: number; // e.g. 1 = final, 2 = SF, 3 = QF, 4 = R16
+  round: number;
   matchNumber: number;
-  homePlayer: Player | null; // null = BYE
+  homePlayer: Player | null;
   awayPlayer: Player | null;
   homeScore: number | null;
   awayScore: number | null;
