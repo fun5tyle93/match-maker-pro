@@ -84,7 +84,7 @@ export function SwissStandingsTable({
                         {stat.avgPoints.toFixed(2)}
                       </td>
                       <td className="py-2 px-2 text-center font-mono text-muted-foreground">
-                        {stat.buchholz}
+                        {stat.buchholz.toFixed(2)}
                       </td>
                       <td className={cn(
                         'py-2 px-2 text-center font-mono font-bold',
@@ -93,6 +93,9 @@ export function SwissStandingsTable({
                         stat.goalDifference === 0 && 'text-muted-foreground',
                       )}>
                         {stat.goalDifference > 0 ? '+' : ''}{stat.goalDifference}
+                      </td>
+                      <td className="py-2 px-2 text-center text-muted-foreground">
+                        {stat.hasHadBye ? '✓' : '–'}
                       </td>
                     </tr>
                   );
