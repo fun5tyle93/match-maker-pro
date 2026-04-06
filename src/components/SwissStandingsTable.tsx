@@ -107,8 +107,9 @@ export function SwissStandingsTable({
               <span>Pkt = Punkte</span>
               <span>Sp = Spiele</span>
               <span>Ø = Ø Pkt/Spiel</span>
-              <span>BHZ = Buchholz-Zahl</span>
+              <span>BHZ = Ø Gegnerpunkte (0–2)</span>
               <span>± = Tordifferenz</span>
+              <span>Bye = Spielfrei gehabt</span>
             </div>
           </div>
         )}
