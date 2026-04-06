@@ -51,8 +51,9 @@ export function SwissStandingsTable({
                   <th className="text-center py-2 px-2" title="Punkte">Pkt</th>
                   <th className="text-center py-2 px-2" title="Spiele">Sp</th>
                   <th className="text-center py-2 px-2" title="Ø Punkte / Spiel">Ø</th>
-                  <th className="text-center py-2 px-2" title="Buchholz-Zahl">BHZ</th>
+                  <th className="text-center py-2 px-2" title="Buchholz-Wert (Ø Gegnerpunkte, 0.0–2.0)">BHZ</th>
                   <th className="text-center py-2 px-2" title="Torverhältnis">±</th>
+                  <th className="text-center py-2 px-2" title="Spielfrei">Bye</th>
                 </tr>
               </thead>
               <tbody>

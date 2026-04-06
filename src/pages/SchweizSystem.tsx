@@ -659,6 +659,16 @@ export default function SchweizSystem() {
                                 </span>
                               </div>
                             )}
+                            {segment.byePlayerId && (
+                              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm">
+                                <AlertCircle className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-muted-foreground">Spielfrei: </span>
+                                <span className="font-medium">
+                                  {session.players.find(p => p.id === segment.byePlayerId)?.name ?? '–'}
+                                </span>
+                                <span className="text-xs text-muted-foreground">(0 Punkte, 0 Tore)</span>
+                              </div>
+                            )}
                             {segment.matches.length === 0 ? (
                               <p className="text-muted-foreground text-center py-4">Keine Paarungen in diesem Durchgang</p>
                             ) : (
