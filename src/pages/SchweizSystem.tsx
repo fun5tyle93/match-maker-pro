@@ -145,16 +145,19 @@ export default function SchweizSystem() {
     let newRounds: SwissRound[];
 
     if (s.config.refereeMode) {
-      const { pass1, pass2 } = generateRefereeRound(s.players, s.rounds, nextRoundNumber);
+      const { pass1, pass2, byePlayerId } = generateRefereeRound(s.players, s.rounds, nextRoundNumber);
+      // Attach byePlayerId to first pass
+      if (byePlayerId) pass1.byePlayerId = byePlayerId;
       newRounds = [...s.rounds, pass1, pass2];
       setExpandedRounds([`${nextRoundNumber}-1`]);
     } else {
-      const matches = generateSwissRoundMatches(s.players, s.rounds, nextRoundNumber);
+      const { matches, byePlayerId } = generateSwissRoundMatches(s.players, s.rounds, nextRoundNumber);
       const round: SwissRound = {
         roundNumber: nextRoundNumber,
         phase: 'swiss',
         matches,
         isCompleted: false,
+        byePlayerId,
       };
       newRounds = [...s.rounds, round];
       setExpandedRounds([`${nextRoundNumber}`]);
