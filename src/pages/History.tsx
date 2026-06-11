@@ -164,8 +164,16 @@ const History = () => {
                                 className="h-7 w-48"
                                 autoFocus
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') saveSessionName(session.id);
-                                  if (e.key === 'Escape') cancelEditingName();
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    saveSessionName(session.id);
+                                  }
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    cancelEditingName();
+                                  }
                                 }}
                               />
                               <Button
