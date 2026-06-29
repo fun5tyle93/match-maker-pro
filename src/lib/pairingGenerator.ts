@@ -53,7 +53,8 @@ export function generatePairings(
 
   const numTables = Math.floor(numPlayers / 2);
 
-  players.forEach(p => {
+  // Initialize tracking for ALL players (including BYE)
+  allPlayers.forEach(p => {
     whiteCount[p.id] = 0;
     lastRole[p.id] = null;
     tableCount[p.id] = {};
@@ -102,7 +103,8 @@ export function generatePairings(
       });
 
       // --- Assign tables fairly via randomized scoring ---
-      // Create a shuffled list of available table indices [0, 1, 2, ...]
+      // CRITICAL FIX: Shuffle table indices FOR EACH ROUND to ensure uniform distribution
+      // This ensures that tables are randomly distributed per round, not fixed by pair order
       const tableIndices = shuffleArray(
         Array.from({ length: sidesAssigned.length }, (_, i) => i)
       );
