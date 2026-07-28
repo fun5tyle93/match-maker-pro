@@ -1,6 +1,8 @@
 export interface Player {
   id: string;
   name: string;
+  /** Whether the player already had a BYE (freilos) in the Swiss system */
+  hasHadBye?: boolean;
 }
 
 export interface Match {
