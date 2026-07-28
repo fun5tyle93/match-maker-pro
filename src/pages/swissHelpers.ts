@@ -1,8 +1,10 @@
 import { saveToHistory } from '@/lib/storage';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 import { TrainingSession } from '@/types';
+import { SwissSession } from '@/types/swiss';
+import { toast } from 'sonner';
 
-function convertSwissToTrainingSession(s: SwissSession): TrainingSession {
+export function convertSwissToTrainingSession(s: SwissSession): TrainingSession {
   const swissMatches = s.rounds.flatMap(r => r.matches);
   const playoffMatches = (s.playoffMatches ?? []).map(pm => ({
     id: pm.id,
@@ -28,21 +30,21 @@ function convertSwissToTrainingSession(s: SwissSession): TrainingSession {
 }
 
 // Expose export helpers in the page via handlers
-const handleExportXLSX = (s: SwissSession | null) => {
+export const handleExportXLSX = (s: SwissSession | null) => {
   if (!s) return;
   const ts = convertSwissToTrainingSession(s);
   exportTrainingToXLSX(ts);
   toast.success('XLSX exportiert');
 };
 
-const handleExportPDF = (s: SwissSession | null) => {
+export const handleExportPDF = (s: SwissSession | null) => {
   if (!s) return;
   const ts = convertSwissToTrainingSession(s);
   exportTrainingToPDF(ts);
   toast.success('PDF exportiert');
 };
 
-const persistSwissToHistory = async (s: SwissSession) => {
+export const persistSwissToHistory = async (s: SwissSession) => {
   try {
     const ts = convertSwissToTrainingSession(s);
     await saveToHistory(ts);
