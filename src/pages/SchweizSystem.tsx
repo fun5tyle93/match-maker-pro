@@ -680,7 +680,7 @@ export default function SchweizSystem() {
                           <div className="flex items-center gap-3">
                             <span className={cn('font-semibold', segComplete && 'text-primary')}>
                               {segment.pass
-                                ? `Durchgang ${segment.pass} ${segment.pass === 1 ? '(Spieler A)' : '(Spieler B)'}
+                                ? `Durchgang ${segment.pass} ${segment.pass === 1 ? '(Spieler A)' : '(Spieler B)'}`
                                 : `Runde ${roundNum}`}
                             </span>
                             {segComplete && <CheckCircle2 className="w-4 h-4 text-primary" />}
