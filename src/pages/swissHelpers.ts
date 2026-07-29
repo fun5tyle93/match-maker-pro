@@ -18,7 +18,7 @@ export function convertSwissToTrainingSession(s: SwissSession): TrainingSession 
   const matches = [...swissMatches, ...playoffMatches];
   return {
     id: s.id,
-    name: `Schweizer ${new Date(s.date).toLocaleDateString()}`,
+    name: `Schweizer System vom ${new Date(s.date).toLocaleDateString('de-DE')}`,
     date: s.date,
     players: s.players,
     matches,
@@ -46,7 +46,7 @@ export const handleExportPDF = (s: SwissSession | null) => {
 
 export const persistSwissToHistory = async (s: SwissSession) => {
   try {
-    const ts = convertSwissToTrainingSession(s);
+    const ts = { ...convertSwissToTrainingSession(s), isCompleted: true };
     await saveToHistory(ts);
     toast.success('Turnier in der Historie gespeichert');
   } catch (err) {

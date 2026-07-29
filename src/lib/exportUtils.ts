@@ -60,7 +60,10 @@ export function exportTrainingToXLSX(session: TrainingSession): void {
 }
 
 // Export training session to PDF with TKC71 branding
-export async function exportTrainingToPDF(session: TrainingSession): Promise<void> {
+export async function exportTrainingToPDF(
+  session: TrainingSession,
+  options?: { print?: boolean },
+): Promise<void> {
   const stats = calculatePlayerStats(session.players, session.matches);
   const matchesByRound = groupMatchesByRound(session.matches);
   
@@ -213,6 +216,12 @@ export async function exportTrainingToPDF(session: TrainingSession): Promise<voi
   const fileName = session.name 
     ? `${session.name.replace(/\s/g, '_')}.pdf`
     : `Trainingsabend_${date.replace(/\./g, '-')}.pdf`;
+  if (options?.print) {
+    doc.autoPrint();
+    const url = doc.output('bloburl') as unknown as string;
+    window.open(url, '_blank');
+    return;
+  }
   doc.save(fileName);
 }
 
