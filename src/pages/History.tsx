@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { History as HistoryIcon, Calendar, Users, Eye, Trash2, Download, FileSpreadsheet, FileText, Pencil, Save, X } from 'lucide-react';
+import { History as HistoryIcon, Calendar, Users, Eye, Trash2, Download, FileSpreadsheet, FileText, Pencil, Save, X, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { StandingsTable } from '@/components/StandingsTable';
@@ -267,6 +267,12 @@ const History = () => {
                             }}>
                               <FileText className="w-4 h-4 mr-2" />
                               Als PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              exportTrainingToPDF(session, { print: true });
+                            }}>
+                              <Printer className="w-4 h-4 mr-2" />
+                              Drucken
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
