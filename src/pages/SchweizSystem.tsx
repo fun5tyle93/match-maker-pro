@@ -594,6 +594,13 @@ export default function SchweizSystem() {
               <Button variant="outline" size="sm" onClick={() => handleExportPDF(session)}>
                 Export PDF
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => persistSwissToHistory(session)}
+              >
+                In Historie speichern
+              </Button>
             </div>
           )}
         </div>
