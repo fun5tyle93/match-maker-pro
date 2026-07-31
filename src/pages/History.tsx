@@ -86,6 +86,25 @@ const History = () => {
     setEditSessionName('');
   };
 
+  const handleUpdateMatchScore = async (matchId: string, homeScore: number, awayScore: number) => {
+    if (!selectedSession) return;
+    const updatedSession: TrainingSession = {
+      ...selectedSession,
+      matches: selectedSession.matches.map((m) =>
+        m.id === matchId ? { ...m, homeScore, awayScore, isCompleted: true } : m
+      ),
+    };
+    setSelectedSession(updatedSession);
+    try {
+      await saveToHistory(updatedSession);
+      setSessions(await loadHistory());
+      toast.success('Ergebnis aktualisiert');
+    } catch (err) {
+      console.error('Failed to update match score:', err);
+      toast.error('Fehler beim Speichern des Ergebnisses');
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('de-DE', {
       weekday: 'long',
@@ -341,8 +360,8 @@ const History = () => {
                         <MatchCard
                           key={match.id}
                           match={match}
-                          onUpdateScore={() => {}}
-                          readonly
+                          onUpdateScore={handleUpdateMatchScore}
+                          readonly={!isAdmin}
                         />
                       ))}
                     </div>
