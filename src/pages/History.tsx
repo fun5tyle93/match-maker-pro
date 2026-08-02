@@ -355,27 +355,49 @@ const History = () => {
             
             {selectedSession && (
               <div className="space-y-6">
-                <StandingsTable 
-                  stats={calculatePlayerStats(selectedSession.players, selectedSession.matches)} 
-                  title="Endstand"
-                />
-                
-                <div className="space-y-4">
-                  <h3 className="font-display text-lg">Alle Spiele</h3>
-                  {Object.entries(groupMatchesByRound(selectedSession.matches)).map(([round, matches]) => (
-                    <div key={round} className="space-y-2">
-                      <h4 className="text-sm font-semibold text-muted-foreground">Runde {round}</h4>
-                      {matches.map((match) => (
-                        <MatchCard
-                          key={match.id}
-                          match={match}
-                          onUpdateScore={handleUpdateMatchScore}
-                          readonly={!isAdmin}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
+                {(() => {
+                  const swissMatches = getSwissMatches(selectedSession.matches);
+                  const playoffMatches = toPlayoffMatches(selectedSession.matches);
+                  const hasPlayoff = playoffMatches.length > 0;
+                  return (
+                    <>
+                      <StandingsTable
+                        stats={calculatePlayerStats(selectedSession.players, swissMatches)}
+                        title={hasPlayoff ? 'Vorrunde – Endstand' : 'Endstand'}
+                      />
+
+                      <div className="space-y-4">
+                        <h3 className="font-display text-lg">
+                          {hasPlayoff ? 'Vorrunden-Spiele' : 'Alle Spiele'}
+                        </h3>
+                        {Object.entries(groupMatchesByRound(swissMatches)).map(([round, matches]) => (
+                          <div key={round} className="space-y-2">
+                            <h4 className="text-sm font-semibold text-muted-foreground">Runde {round}</h4>
+                            {matches.map((match) => (
+                              <MatchCard
+                                key={match.id}
+                                match={match}
+                                onUpdateScore={handleUpdateMatchScore}
+                                readonly={!isAdmin}
+                              />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+
+                      {hasPlayoff && (
+                        <div className="space-y-4">
+                          <h3 className="font-display text-lg">Playoff</h3>
+                          <PlayoffBracket
+                            matches={playoffMatches}
+                            onUpdateScore={handleUpdateMatchScore}
+                            readonly={!isAdmin}
+                          />
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </DialogContent>
