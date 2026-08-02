@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { StandingsTable } from '@/components/StandingsTable';
 import { MatchCard } from '@/components/MatchCard';
+import { PlayoffBracket } from '@/components/PlayoffBracket';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +35,7 @@ import { TrainingSession, Match } from '@/types';
 import { loadHistory, deleteFromHistory, saveToHistory } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
+import { getSwissMatches, toPlayoffMatches, getPlayoffFinalists } from '@/lib/tournamentPhases';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 
 const History = () => {
