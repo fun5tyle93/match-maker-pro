@@ -13,6 +13,14 @@ export interface Match {
   homeScore: number | null;
   awayScore: number | null;
   isCompleted: boolean;
+  /** 'swiss' = Vorrunde/regulär, 'playoff' = Playoff-Spiel */
+  phase?: 'swiss' | 'playoff';
+  /** Playoff bracket round (4=R16, 3=QF, 2=SF, 1=Finale) */
+  playoffRound?: number;
+  /** Position within the playoff round */
+  matchNumber?: number;
+  /** Freilos im Playoff */
+  isBye?: boolean;
 }
 
 export interface PlayerStats {
@@ -39,6 +47,8 @@ export interface TrainingSession {
   roundCount: number;
   matchesPerPairing: number;
   transferredToLeagues?: string[];
+  /** 'training' = normales Training, 'swiss' = Schweizer System */
+  tournamentType?: 'training' | 'swiss';
 }
 
 export interface League {
