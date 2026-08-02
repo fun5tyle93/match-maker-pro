@@ -167,8 +167,13 @@ const History = () => {
         ) : (
           <div className="grid gap-4">
             {sessions.map((session) => {
-              const stats = calculatePlayerStats(session.players, session.matches);
-              const winner = stats[0]?.player.name || 'Unbekannt';
+              const swissMatches = getSwissMatches(session.matches);
+              const playoffMatches = toPlayoffMatches(session.matches);
+              const stats = calculatePlayerStats(session.players, swissMatches);
+              const champion = playoffMatches.length > 0
+                ? getPlayoffFinalists(playoffMatches).champion
+                : null;
+              const winner = champion?.name || stats[0]?.player.name || 'Unbekannt';
               
               return (
                 <Card key={session.id} className="animate-fade-in hover:shadow-glow transition-shadow">
@@ -246,7 +251,9 @@ const History = () => {
                           <span>{session.roundCount} Runden</span>
                         </div>
                         <p className="text-sm mt-2">
-                          <span className="text-accent font-semibold">Sieger:</span> {winner}
+                          <span className="text-accent font-semibold">
+                            {playoffMatches.length > 0 ? 'Turniersieger:' : 'Sieger:'}
+                          </span> {winner}
                         </p>
                         {session.transferredToLeagues && session.transferredToLeagues.length > 0 && (
                           <p className="text-xs text-muted-foreground mt-1">
