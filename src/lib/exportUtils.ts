@@ -83,8 +83,11 @@ export async function exportTrainingToPDF(
   session: TrainingSession,
   options?: { print?: boolean },
 ): Promise<void> {
-  const stats = calculatePlayerStats(session.players, session.matches);
-  const matchesByRound = groupMatchesByRound(session.matches);
+  const swissMatches = getSwissMatches(session.matches);
+  const playoffMatches = toPlayoffMatches(session.matches);
+  const hasPlayoff = playoffMatches.length > 0;
+  const stats = calculatePlayerStats(session.players, swissMatches);
+  const matchesByRound = groupMatchesByRound(swissMatches);
   
   const date = new Date(session.date).toLocaleDateString('de-DE');
   // Use session name as title, with date as subtitle
@@ -100,7 +103,7 @@ export async function exportTrainingToPDF(
 
   // ============ STANDINGS TABLE ============
   // Column order matches UI: #, Spieler, Pkt, Tore, Diff
-  currentY = drawSectionHeader(doc, 'Tabelle', currentY);
+  currentY = drawSectionHeader(doc, hasPlayoff ? 'Vorrunde – Tabelle' : 'Tabelle', currentY);
   
   const tableStyles = getCompactTableStyles();
   
@@ -139,7 +142,7 @@ export async function exportTrainingToPDF(
   currentY = (doc as any).lastAutoTable.finalY + 8;
 
   // ============ MATCHES BY ROUND (Scaled layout for A4) ============
-  currentY = drawSectionHeader(doc, 'Spiele', currentY);
+  currentY = drawSectionHeader(doc, hasPlayoff ? 'Vorrunde – Spiele' : 'Spiele', currentY);
   
   const { pageWidth, pageHeight } = PDF_CONFIG;
   const contentWidth = pageWidth - (margin * 2);
@@ -230,6 +233,50 @@ export async function exportTrainingToPDF(
     // Alternate columns
     col = (col + 1) % 2;
   });
+
+  // ============ PLAYOFF BRACKET ============
+  if (hasPlayoff) {
+    doc.addPage();
+    let playoffY = margin + 6;
+    playoffY = drawSectionHeader(doc, 'Playoff', playoffY);
+
+    const finalMatch = playoffMatches.find(m => m.round === 1);
+    const champion = finalMatch ? playoffMatchWinner(finalMatch) : null;
+
+    autoTable(doc, {
+      startY: playoffY,
+      head: [['Runde', 'Spiel', 'Heim', 'Ergebnis', 'Gast', 'Sieger']],
+      body: playoffMatches.map(m => [
+        getRoundName(m.round),
+        m.matchNumber,
+        m.homePlayer?.name ?? 'TBD',
+        m.isBye ? 'Freilos' : m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-:-',
+        m.awayPlayer?.name ?? (m.isBye ? '' : 'TBD'),
+        playoffMatchWinner(m)?.name ?? '',
+      ]),
+      ...getCompactTableStyles(),
+      columnStyles: {
+        0: { halign: 'left', cellWidth: 28 },
+        1: { halign: 'center', cellWidth: 12 },
+        2: { halign: 'left', cellWidth: 32 },
+        3: { halign: 'center', cellWidth: 20 },
+        4: { halign: 'left', cellWidth: 32 },
+        5: { halign: 'left', cellWidth: 32 },
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    playoffY = (doc as any).lastAutoTable.finalY + 10;
+
+    if (champion) {
+      doc.setTextColor(...PDF_COLORS.accent);
+      doc.setFontSize(PDF_CONFIG.fontSize.subtitle ?? 12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Turniersieger: ${champion.name}`, margin, playoffY);
+      doc.setTextColor(...PDF_COLORS.text);
+      doc.setFont('helvetica', 'normal');
+    }
+  }
 
   // Save the PDF
   const fileName = session.name 
