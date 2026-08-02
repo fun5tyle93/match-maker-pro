@@ -2,6 +2,8 @@ import * as XLSX from '@e965/xlsx';
 import autoTable from 'jspdf-autotable';
 import { TrainingSession, League, Match } from '@/types';
 import { calculatePlayerStats } from './pairingGenerator';
+import { getSwissMatches, toPlayoffMatches, playoffMatchWinner } from './tournamentPhases';
+import { getRoundName } from './swissPairing';
 import {
   createStyledPDF,
   drawSectionHeader,
@@ -25,7 +27,10 @@ function groupMatchesByRound(matches: Match[]): Record<number, Match[]> {
 
 // Export training session to XLSX
 export function exportTrainingToXLSX(session: TrainingSession): void {
-  const stats = calculatePlayerStats(session.players, session.matches);
+  const swissMatches = getSwissMatches(session.matches);
+  const playoffMatches = toPlayoffMatches(session.matches);
+  const hasPlayoff = playoffMatches.length > 0;
+  const stats = calculatePlayerStats(session.players, swissMatches);
   const wb = XLSX.utils.book_new();
 
   // Standings sheet with all columns
@@ -38,19 +43,33 @@ export function exportTrainingToXLSX(session: TrainingSession): void {
   }));
   
   const standingsSheet = XLSX.utils.json_to_sheet(standingsData);
-  XLSX.utils.book_append_sheet(wb, standingsSheet, 'Tabelle');
+  XLSX.utils.book_append_sheet(wb, standingsSheet, hasPlayoff ? 'Vorrunde Tabelle' : 'Tabelle');
 
   // Matches sheet grouped by round
-  const matchesData = session.matches.map(m => ({
+  const matchesData = swissMatches.map(m => ({
     'Runde': m.round,
-    'Tisch': session.matches.filter(match => match.round === m.round).indexOf(m) + 1,
+    'Tisch': swissMatches.filter(match => match.round === m.round).indexOf(m) + 1,
     'Heim': m.homePlayer.name,
     'Ergebnis': m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-',
     'Gast': m.awayPlayer.name,
   }));
   
   const matchesSheet = XLSX.utils.json_to_sheet(matchesData);
-  XLSX.utils.book_append_sheet(wb, matchesSheet, 'Spiele');
+  XLSX.utils.book_append_sheet(wb, matchesSheet, hasPlayoff ? 'Vorrunde Spiele' : 'Spiele');
+
+  // Playoff sheet (bracket incl. results)
+  if (hasPlayoff) {
+    const playoffData = playoffMatches.map(m => ({
+      'Runde': getRoundName(m.round),
+      'Spiel': m.matchNumber,
+      'Heim': m.homePlayer?.name ?? 'TBD',
+      'Ergebnis': m.isBye ? 'Freilos' : m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-',
+      'Gast': m.awayPlayer?.name ?? (m.isBye ? '' : 'TBD'),
+      'Sieger': playoffMatchWinner(m)?.name ?? '',
+    }));
+    const playoffSheet = XLSX.utils.json_to_sheet(playoffData);
+    XLSX.utils.book_append_sheet(wb, playoffSheet, 'Playoff');
+  }
 
   const date = new Date(session.date).toLocaleDateString('de-DE');
   const fileName = session.name 
@@ -64,8 +83,11 @@ export async function exportTrainingToPDF(
   session: TrainingSession,
   options?: { print?: boolean },
 ): Promise<void> {
-  const stats = calculatePlayerStats(session.players, session.matches);
-  const matchesByRound = groupMatchesByRound(session.matches);
+  const swissMatches = getSwissMatches(session.matches);
+  const playoffMatches = toPlayoffMatches(session.matches);
+  const hasPlayoff = playoffMatches.length > 0;
+  const stats = calculatePlayerStats(session.players, swissMatches);
+  const matchesByRound = groupMatchesByRound(swissMatches);
   
   const date = new Date(session.date).toLocaleDateString('de-DE');
   // Use session name as title, with date as subtitle
@@ -81,7 +103,7 @@ export async function exportTrainingToPDF(
 
   // ============ STANDINGS TABLE ============
   // Column order matches UI: #, Spieler, Pkt, Tore, Diff
-  currentY = drawSectionHeader(doc, 'Tabelle', currentY);
+  currentY = drawSectionHeader(doc, hasPlayoff ? 'Vorrunde – Tabelle' : 'Tabelle', currentY);
   
   const tableStyles = getCompactTableStyles();
   
@@ -120,7 +142,7 @@ export async function exportTrainingToPDF(
   currentY = (doc as any).lastAutoTable.finalY + 8;
 
   // ============ MATCHES BY ROUND (Scaled layout for A4) ============
-  currentY = drawSectionHeader(doc, 'Spiele', currentY);
+  currentY = drawSectionHeader(doc, hasPlayoff ? 'Vorrunde – Spiele' : 'Spiele', currentY);
   
   const { pageWidth, pageHeight } = PDF_CONFIG;
   const contentWidth = pageWidth - (margin * 2);
@@ -211,6 +233,50 @@ export async function exportTrainingToPDF(
     // Alternate columns
     col = (col + 1) % 2;
   });
+
+  // ============ PLAYOFF BRACKET ============
+  if (hasPlayoff) {
+    doc.addPage();
+    let playoffY = margin + 6;
+    playoffY = drawSectionHeader(doc, 'Playoff', playoffY);
+
+    const finalMatch = playoffMatches.find(m => m.round === 1);
+    const champion = finalMatch ? playoffMatchWinner(finalMatch) : null;
+
+    autoTable(doc, {
+      startY: playoffY,
+      head: [['Runde', 'Spiel', 'Heim', 'Ergebnis', 'Gast', 'Sieger']],
+      body: playoffMatches.map(m => [
+        getRoundName(m.round),
+        m.matchNumber,
+        m.homePlayer?.name ?? 'TBD',
+        m.isBye ? 'Freilos' : m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-:-',
+        m.awayPlayer?.name ?? (m.isBye ? '' : 'TBD'),
+        playoffMatchWinner(m)?.name ?? '',
+      ]),
+      ...getCompactTableStyles(),
+      columnStyles: {
+        0: { halign: 'left', cellWidth: 28 },
+        1: { halign: 'center', cellWidth: 12 },
+        2: { halign: 'left', cellWidth: 32 },
+        3: { halign: 'center', cellWidth: 20 },
+        4: { halign: 'left', cellWidth: 32 },
+        5: { halign: 'left', cellWidth: 32 },
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    playoffY = (doc as any).lastAutoTable.finalY + 10;
+
+    if (champion) {
+      doc.setTextColor(...PDF_COLORS.accent);
+      doc.setFontSize(PDF_CONFIG.fontSize.subtitle ?? 12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Turniersieger: ${champion.name}`, margin, playoffY);
+      doc.setTextColor(...PDF_COLORS.text);
+      doc.setFont('helvetica', 'normal');
+    }
+  }
 
   // Save the PDF
   const fileName = session.name 

@@ -41,6 +41,7 @@ function toSession(row: any, players: Player[], matches: Match[]): TrainingSessi
     roundCount: row.round_count,
     matchesPerPairing: row.matches_per_pairing,
     transferredToLeagues: row.transferred_to_leagues ?? [],
+    tournamentType: (row.tournament_type ?? 'training') as 'training' | 'swiss',
   };
 }
 
@@ -53,6 +54,10 @@ function toMatch(row: any): Match {
     homeScore: row.home_score,
     awayScore: row.away_score,
     isCompleted: row.is_completed,
+    phase: (row.phase ?? 'swiss') as 'swiss' | 'playoff',
+    playoffRound: row.playoff_round ?? undefined,
+    matchNumber: row.match_number ?? undefined,
+    isBye: row.is_bye ?? false,
   };
 }
 
@@ -199,6 +204,7 @@ async function saveSessionToDB(session: TrainingSession): Promise<void> {
     round_count: session.roundCount,
     matches_per_pairing: session.matchesPerPairing,
     transferred_to_leagues: session.transferredToLeagues ?? [],
+    tournament_type: session.tournamentType ?? 'training',
   });
   if (sessError) {
     console.error('Failed to upsert session:', sessError);
@@ -232,6 +238,10 @@ async function saveSessionToDB(session: TrainingSession): Promise<void> {
         home_score: m.homeScore,
         away_score: m.awayScore,
         is_completed: m.isCompleted,
+        phase: m.phase ?? 'swiss',
+        playoff_round: m.playoffRound ?? null,
+        match_number: m.matchNumber ?? null,
+        is_bye: m.isBye ?? false,
       }))
     );
   }

@@ -33,7 +33,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { loadLeagues, saveLeagues } from '@/lib/storage';
 import { cn } from '@/lib/utils';
-import { handleExportXLSX, handleExportPDF, persistSwissToHistory, convertSwissToTrainingSession } from '@/pages/swissHelpers';
+import { handleExportXLSX, handleExportPDF, persistSwissToHistory, convertSwissToTrainingSession, computeFinalSwissStats } from '@/pages/swissHelpers';
 
 const STORAGE_KEY = 'swiss-session-v1';
 
@@ -279,10 +279,8 @@ export default function SchweizSystem() {
 
   const handleTransferResults = async (leagueIds: string[], nameMatches: Map<string, string>) => {
     if (!session) return;
-    const stats = computeSwissStats(session.players, session.rounds);
-
-    const firstPlace = stats[0]?.player.name;
-    const secondPlace = stats[1]?.player.name;
+    // Final results: Vorrunde + Playoff-Spiele; Titel aus dem Playoff-Finale (falls gespielt)
+    const { stats, championName: firstPlace, viceChampionName: secondPlace } = computeFinalSwissStats(session);
 
     const updatedLeagues = leagues.map(league => {
       if (!leagueIds.includes(league.id)) return league;
@@ -307,7 +305,7 @@ export default function SchweizSystem() {
             goalsFor: e.goalsFor + stat.goalsFor,
             goalsAgainst: e.goalsAgainst + stat.goalsAgainst,
             points: e.points + stat.points,
-            pointsAgainst: (e.pointsAgainst ?? 0) + (stat.gamesPlayed * 2 - stat.points),
+            pointsAgainst: (e.pointsAgainst ?? 0) + stat.pointsAgainst,
             goalDifference: e.goalDifference + stat.goalDifference,
             championships: (e.championships ?? 0) + (isChamp ? 1 : 0),
             viceChampionships: (e.viceChampionships ?? 0) + (isVice ? 1 : 0),
@@ -321,7 +319,7 @@ export default function SchweizSystem() {
             goalsFor: stat.goalsFor,
             goalsAgainst: stat.goalsAgainst,
             points: stat.points,
-            pointsAgainst: stat.gamesPlayed * 2 - stat.points,
+            pointsAgainst: stat.pointsAgainst,
             goalDifference: stat.goalDifference,
             championships: isChamp ? 1 : 0,
             viceChampionships: isVice ? 1 : 0,
@@ -377,18 +375,8 @@ export default function SchweizSystem() {
   const playoffFinalMatch = session?.playoffMatches?.find(m => m.round === 1);
   const playoffChampion = playoffFinalMatch ? getPlayoffWinner(playoffFinalMatch) : null;
 
-  // Transfer stats compatible shape
-  const transferStats = stats.map(s => ({
-    player: s.player,
-    wins: s.wins,
-    draws: s.draws,
-    losses: s.losses,
-    goalsFor: s.goalsFor,
-    goalsAgainst: s.goalsAgainst,
-    points: s.points,
-    pointsAgainst: s.gamesPlayed * 2 - s.points,
-    goalDifference: s.goalDifference,
-  }));
+  // Transfer stats: finale Ergebnisse (Vorrunde + Playoff)
+  const transferStats = session ? computeFinalSwissStats(session).stats : [];
 
   // ─── Render ──────────────────────────────────────────────────────────
 

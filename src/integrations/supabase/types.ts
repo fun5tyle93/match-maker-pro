@@ -70,7 +70,11 @@ export type Database = {
           home_player_name: string
           home_score: number | null
           id: string
+          is_bye: boolean
           is_completed: boolean
+          match_number: number | null
+          phase: string
+          playoff_round: number | null
           round: number
           session_id: string
         }
@@ -82,7 +86,11 @@ export type Database = {
           home_player_name: string
           home_score?: number | null
           id?: string
+          is_bye?: boolean
           is_completed?: boolean
+          match_number?: number | null
+          phase?: string
+          playoff_round?: number | null
           round: number
           session_id: string
         }
@@ -94,7 +102,11 @@ export type Database = {
           home_player_name?: string
           home_score?: number | null
           id?: string
+          is_bye?: boolean
           is_completed?: boolean
+          match_number?: number | null
+          phase?: string
+          playoff_round?: number | null
           round?: number
           session_id?: string
         }
@@ -204,6 +216,7 @@ export type Database = {
           matches_per_pairing: number
           name: string | null
           round_count: number
+          tournament_type: string
           transferred_to_leagues: string[] | null
         }
         Insert: {
@@ -213,6 +226,7 @@ export type Database = {
           matches_per_pairing?: number
           name?: string | null
           round_count?: number
+          tournament_type?: string
           transferred_to_leagues?: string[] | null
         }
         Update: {
@@ -222,6 +236,7 @@ export type Database = {
           matches_per_pairing?: number
           name?: string | null
           round_count?: number
+          tournament_type?: string
           transferred_to_leagues?: string[] | null
         }
         Relationships: []

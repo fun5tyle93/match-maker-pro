@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { StandingsTable } from '@/components/StandingsTable';
 import { MatchCard } from '@/components/MatchCard';
+import { PlayoffBracket } from '@/components/PlayoffBracket';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +35,7 @@ import { TrainingSession, Match } from '@/types';
 import { loadHistory, deleteFromHistory, saveToHistory } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
+import { getSwissMatches, toPlayoffMatches, getPlayoffFinalists } from '@/lib/tournamentPhases';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 
 const History = () => {
@@ -165,8 +167,13 @@ const History = () => {
         ) : (
           <div className="grid gap-4">
             {sessions.map((session) => {
-              const stats = calculatePlayerStats(session.players, session.matches);
-              const winner = stats[0]?.player.name || 'Unbekannt';
+              const swissMatches = getSwissMatches(session.matches);
+              const playoffMatches = toPlayoffMatches(session.matches);
+              const stats = calculatePlayerStats(session.players, swissMatches);
+              const champion = playoffMatches.length > 0
+                ? getPlayoffFinalists(playoffMatches).champion
+                : null;
+              const winner = champion?.name || stats[0]?.player.name || 'Unbekannt';
               
               return (
                 <Card key={session.id} className="animate-fade-in hover:shadow-glow transition-shadow">
@@ -244,7 +251,9 @@ const History = () => {
                           <span>{session.roundCount} Runden</span>
                         </div>
                         <p className="text-sm mt-2">
-                          <span className="text-accent font-semibold">Sieger:</span> {winner}
+                          <span className="text-accent font-semibold">
+                            {playoffMatches.length > 0 ? 'Turniersieger:' : 'Sieger:'}
+                          </span> {winner}
                         </p>
                         {session.transferredToLeagues && session.transferredToLeagues.length > 0 && (
                           <p className="text-xs text-muted-foreground mt-1">
@@ -346,27 +355,49 @@ const History = () => {
             
             {selectedSession && (
               <div className="space-y-6">
-                <StandingsTable 
-                  stats={calculatePlayerStats(selectedSession.players, selectedSession.matches)} 
-                  title="Endstand"
-                />
-                
-                <div className="space-y-4">
-                  <h3 className="font-display text-lg">Alle Spiele</h3>
-                  {Object.entries(groupMatchesByRound(selectedSession.matches)).map(([round, matches]) => (
-                    <div key={round} className="space-y-2">
-                      <h4 className="text-sm font-semibold text-muted-foreground">Runde {round}</h4>
-                      {matches.map((match) => (
-                        <MatchCard
-                          key={match.id}
-                          match={match}
-                          onUpdateScore={handleUpdateMatchScore}
-                          readonly={!isAdmin}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
+                {(() => {
+                  const swissMatches = getSwissMatches(selectedSession.matches);
+                  const playoffMatches = toPlayoffMatches(selectedSession.matches);
+                  const hasPlayoff = playoffMatches.length > 0;
+                  return (
+                    <>
+                      <StandingsTable
+                        stats={calculatePlayerStats(selectedSession.players, swissMatches)}
+                        title={hasPlayoff ? 'Vorrunde – Endstand' : 'Endstand'}
+                      />
+
+                      <div className="space-y-4">
+                        <h3 className="font-display text-lg">
+                          {hasPlayoff ? 'Vorrunden-Spiele' : 'Alle Spiele'}
+                        </h3>
+                        {Object.entries(groupMatchesByRound(swissMatches)).map(([round, matches]) => (
+                          <div key={round} className="space-y-2">
+                            <h4 className="text-sm font-semibold text-muted-foreground">Runde {round}</h4>
+                            {matches.map((match) => (
+                              <MatchCard
+                                key={match.id}
+                                match={match}
+                                onUpdateScore={handleUpdateMatchScore}
+                                readonly={!isAdmin}
+                              />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+
+                      {hasPlayoff && (
+                        <div className="space-y-4">
+                          <h3 className="font-display text-lg">Playoff</h3>
+                          <PlayoffBracket
+                            matches={playoffMatches}
+                            onUpdateScore={handleUpdateMatchScore}
+                            readonly={!isAdmin}
+                          />
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </DialogContent>
