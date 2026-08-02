@@ -2,6 +2,8 @@ import * as XLSX from '@e965/xlsx';
 import autoTable from 'jspdf-autotable';
 import { TrainingSession, League, Match } from '@/types';
 import { calculatePlayerStats } from './pairingGenerator';
+import { getSwissMatches, toPlayoffMatches, playoffMatchWinner } from './tournamentPhases';
+import { getRoundName } from './swissPairing';
 import {
   createStyledPDF,
   drawSectionHeader,
@@ -25,7 +27,10 @@ function groupMatchesByRound(matches: Match[]): Record<number, Match[]> {
 
 // Export training session to XLSX
 export function exportTrainingToXLSX(session: TrainingSession): void {
-  const stats = calculatePlayerStats(session.players, session.matches);
+  const swissMatches = getSwissMatches(session.matches);
+  const playoffMatches = toPlayoffMatches(session.matches);
+  const hasPlayoff = playoffMatches.length > 0;
+  const stats = calculatePlayerStats(session.players, swissMatches);
   const wb = XLSX.utils.book_new();
 
   // Standings sheet with all columns
@@ -38,19 +43,33 @@ export function exportTrainingToXLSX(session: TrainingSession): void {
   }));
   
   const standingsSheet = XLSX.utils.json_to_sheet(standingsData);
-  XLSX.utils.book_append_sheet(wb, standingsSheet, 'Tabelle');
+  XLSX.utils.book_append_sheet(wb, standingsSheet, hasPlayoff ? 'Vorrunde Tabelle' : 'Tabelle');
 
   // Matches sheet grouped by round
-  const matchesData = session.matches.map(m => ({
+  const matchesData = swissMatches.map(m => ({
     'Runde': m.round,
-    'Tisch': session.matches.filter(match => match.round === m.round).indexOf(m) + 1,
+    'Tisch': swissMatches.filter(match => match.round === m.round).indexOf(m) + 1,
     'Heim': m.homePlayer.name,
     'Ergebnis': m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-',
     'Gast': m.awayPlayer.name,
   }));
   
   const matchesSheet = XLSX.utils.json_to_sheet(matchesData);
-  XLSX.utils.book_append_sheet(wb, matchesSheet, 'Spiele');
+  XLSX.utils.book_append_sheet(wb, matchesSheet, hasPlayoff ? 'Vorrunde Spiele' : 'Spiele');
+
+  // Playoff sheet (bracket incl. results)
+  if (hasPlayoff) {
+    const playoffData = playoffMatches.map(m => ({
+      'Runde': getRoundName(m.round),
+      'Spiel': m.matchNumber,
+      'Heim': m.homePlayer?.name ?? 'TBD',
+      'Ergebnis': m.isBye ? 'Freilos' : m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-',
+      'Gast': m.awayPlayer?.name ?? (m.isBye ? '' : 'TBD'),
+      'Sieger': playoffMatchWinner(m)?.name ?? '',
+    }));
+    const playoffSheet = XLSX.utils.json_to_sheet(playoffData);
+    XLSX.utils.book_append_sheet(wb, playoffSheet, 'Playoff');
+  }
 
   const date = new Date(session.date).toLocaleDateString('de-DE');
   const fileName = session.name 
