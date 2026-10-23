@@ -1,6 +1,20 @@
 import { supabase } from '@/integrations/supabase/client';
 import { TrainingSession, League, Player, Match, PlayerStats } from '@/types';
 
+// ─── Helper: Fetch all rows, paging past the PostgREST row limit (default 1000) ───
+
+async function fetchAll(makeQuery: () => any): Promise<any[]> {
+  const pageSize = 1000;
+  const rows: any[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await makeQuery().range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}
+
 // ─── Helper: Convert DB rows to domain types ───
 
 function toLeague(row: any, statsRows: any[]): League {
@@ -65,27 +79,37 @@ function toMatch(row: any): Match {
 // ─── Leagues ───
 
 export async function loadLeagues(): Promise<League[]> {
-  const { data: leagueRows, error } = await supabase
-    .from('leagues')
-    .select('*')
-    .order('created_at', { ascending: true });
+  try {
+    const { data: leagueRows, error } = await supabase
+      .from('leagues')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    if (!leagueRows || leagueRows.length === 0) return [];
 
-  if (error) {
-    console.error('Failed to load leagues:', error);
+    const leagueIds = leagueRows.map(r => r.id);
+    const statsRows = await fetchAll(() =>
+      supabase
+        .from('player_stats')
+        .select('*')
+        .in('league_id', leagueIds)
+        .order('id', { ascending: true })
+    );
+
+    const statsByLeague = new Map<string, any[]>();
+    for (const s of statsRows) {
+      statsByLeague.set(s.league_id, [...(statsByLeague.get(s.league_id) ?? []), s]);
+    }
+    return leagueRows.map(row =>
+      toLeague(
+        row,
+        (statsByLeague.get(row.id) ?? []).sort((a, b) => b.points - a.points)
+      )
+    );
+  } catch (err) {
+    console.error('Failed to load leagues:', err);
     return [];
   }
-
-  const leagues: League[] = [];
-  for (const row of leagueRows ?? []) {
-    const { data: statsRows } = await supabase
-      .from('player_stats')
-      .select('*')
-      .eq('league_id', row.id)
-      .order('points', { ascending: false });
-
-    leagues.push(toLeague(row, statsRows ?? []));
-  }
-  return leagues;
 }
 
 export async function saveLeagues(leagues: League[]): Promise<void> {
@@ -158,23 +182,53 @@ export async function saveToHistory(session: TrainingSession): Promise<void> {
 }
 
 export async function loadHistory(): Promise<TrainingSession[]> {
-  const { data: rows, error } = await supabase
-    .from('training_sessions')
-    .select('*')
-    .eq('is_completed', true)
-    .order('date', { ascending: false });
+  try {
+    const sessionRows = await fetchAll(() =>
+      supabase
+        .from('training_sessions')
+        .select('*')
+        .eq('is_completed', true)
+        .order('date', { ascending: false })
+        .order('id', { ascending: true })
+    );
+    if (sessionRows.length === 0) return [];
 
-  if (error) {
-    console.error('Failed to load history:', error);
+    const sessionIds = sessionRows.map(r => r.id);
+    const [playerRows, matchRows] = await Promise.all([
+      fetchAll(() =>
+        supabase.from('training_players').select('*').in('session_id', sessionIds).order('id', { ascending: true })
+      ),
+      fetchAll(() =>
+        supabase.from('matches').select('*').in('session_id', sessionIds).order('id', { ascending: true })
+      ),
+    ]);
+
+    const playersBySession = groupBy(playerRows, r => r.session_id);
+    const matchesBySession = groupBy(matchRows, r => r.session_id);
+
+    return sessionRows.map(row => {
+      const players: Player[] = (playersBySession.get(row.id) ?? []).map(p => ({
+        id: p.player_id,
+        name: p.player_name,
+      }));
+      const matches: Match[] = (matchesBySession.get(row.id) ?? [])
+        .map(toMatch)
+        .sort((a, b) => a.round - b.round || (a.tableNumber ?? 0) - (b.tableNumber ?? 0));
+      return toSession(row, players, matches);
+    });
+  } catch (err) {
+    console.error('Failed to load history:', err);
     return [];
   }
+}
 
-  const sessions: TrainingSession[] = [];
-  for (const row of rows ?? []) {
-    const session = await loadSessionById(row.id);
-    if (session) sessions.push(session);
+function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const k = key(row);
+    groups.set(k, [...(groups.get(k) ?? []), row]);
   }
-  return sessions;
+  return groups;
 }
 
 export async function deleteFromHistory(sessionId: string): Promise<void> {
