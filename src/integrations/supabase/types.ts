@@ -77,6 +77,7 @@ export type Database = {
           playoff_round: number | null
           round: number
           session_id: string
+          table_number: number | null
         }
         Insert: {
           away_player_id: string
@@ -93,6 +94,7 @@ export type Database = {
           playoff_round?: number | null
           round: number
           session_id: string
+          table_number?: number | null
         }
         Update: {
           away_player_id?: string

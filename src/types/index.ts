@@ -21,6 +21,8 @@ export interface Match {
   matchNumber?: number;
   /** Freilos im Playoff */
   isBye?: boolean;
+  /** Platte (1-basiert), auf der das Spiel gespielt wird */
+  tableNumber?: number;
 }
 
 export interface PlayerStats {
