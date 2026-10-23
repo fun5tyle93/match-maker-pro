@@ -447,7 +447,7 @@ const Training = () => {
                             key={match.id}
                             match={match}
                             onUpdateScore={handleUpdateScore}
-                            tableNumber={index + 1}
+                            tableNumber={match.tableNumber ?? index + 1}
                           />
                         ))}
                       </CardContent>

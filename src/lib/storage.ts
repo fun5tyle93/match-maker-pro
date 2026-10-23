@@ -58,6 +58,7 @@ function toMatch(row: any): Match {
     playoffRound: row.playoff_round ?? undefined,
     matchNumber: row.match_number ?? undefined,
     isBye: row.is_bye ?? false,
+    tableNumber: row.table_number ?? undefined,
   };
 }
 
@@ -242,6 +243,7 @@ async function saveSessionToDB(session: TrainingSession): Promise<void> {
         playoff_round: m.playoffRound ?? null,
         match_number: m.matchNumber ?? null,
         is_bye: m.isBye ?? false,
+        table_number: m.tableNumber ?? null,
       }))
     );
   }

@@ -159,6 +159,7 @@ export function generatePairings(
           homeScore: null,
           awayScore: null,
           isCompleted: false,
+          tableNumber: tableIdx + 1,
         });
       });
 
