@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment-Dateien (.env enthält Konfiguration, nie committen)
+.env
+.env.*
+!.env.example
+
+# Vercel-Projektdaten
+.vercel
