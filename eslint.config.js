@@ -19,6 +19,9 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // New in react-hooks 7. Flags two intentional patterns (load persisted data on
+      // mount, sync an input from props), so it is reported but does not fail the lint.
+      "react-hooks/set-state-in-effect": "warn",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
     },
