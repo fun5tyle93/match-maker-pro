@@ -30,6 +30,8 @@ interface TransferDialogProps {
   stats: PlayerStats[];
   onTransfer: (leagueIds: string[], nameMatches: Map<string, string>) => void;
   onCreateLeague: (name: string) => void;
+  /** Leagues that already received this evening (for example after an interrupted transfer) */
+  transferredLeagueIds?: string[];
 }
 
 export function TransferDialog({
@@ -39,6 +41,7 @@ export function TransferDialog({
   stats,
   onTransfer,
   onCreateLeague,
+  transferredLeagueIds = [],
 }: TransferDialogProps) {
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
   const [newLeagueName, setNewLeagueName] = useState('');
@@ -186,6 +189,9 @@ export function TransferDialog({
                       {league.name}
                       {league.isEternal && (
                         <span className="text-xs text-muted-foreground ml-1">(Pkt + M)</span>
+                      )}
+                      {transferredLeagueIds.includes(league.id) && (
+                        <span className="text-xs text-muted-foreground ml-2">✓ bereits übertragen</span>
                       )}
                     </span>
                     {selectedLeagues.includes(league.id) && (

@@ -1,15 +1,9 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { seedLeague2026, seedLeagueJugend2026, seedEwigeTabelle } from "./lib/seedLeague2026";
 
-// Seed initial league data (runs once, async)
-// Remove old eternal league seed key so new v3 seed (with pointsAgainst) runs
-localStorage.removeItem('kicker_seed_ewig_2026_sb_v1');
-localStorage.removeItem('kicker_seed_ewig_2026_sb_v2');
-localStorage.removeItem('kicker_seed_ewig_2026_sb_v3');
-seedLeague2026();
-seedLeagueJugend2026();
-seedEwigeTabelle();
+// The league seed data (src/lib/seedLeague2026.ts) used to be inserted here on every start of a
+// browser without a marker. The data is in the database now, and running it again on another device
+// could create duplicate leagues, so it is no longer started.
 
 createRoot(document.getElementById("root")!).render(<App />);

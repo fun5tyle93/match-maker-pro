@@ -31,7 +31,7 @@ import {
   generatePlayoff, advancePlayoffBracket, getPlayoffWinner, getRoundName,
 } from '@/lib/swissPairing';
 import { useAuth } from '@/contexts/AuthContext';
-import { loadLeagues, saveLeagues } from '@/lib/storage';
+import { loadLeagues, saveLeague } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { handleExportXLSX, handleExportPDF, persistSwissToHistory, convertSwissToTrainingSession, computeFinalSwissStats } from '@/pages/swissHelpers';
 
@@ -93,7 +93,12 @@ export default function SchweizSystem() {
       });
       setExpandedRounds(incomplete.length > 0 ? [incomplete[0]] : []);
     }
-    loadLeagues().then(setLeagues);
+    loadLeagues()
+      .then(setLeagues)
+      .catch(err => {
+        console.error('Failed to load leagues:', err);
+        toast.error('Die Ligen konnten nicht geladen werden');
+      });
   }, []);
 
   // Persist session on change
@@ -282,8 +287,12 @@ export default function SchweizSystem() {
     // Final results: Vorrunde + Playoff-Spiele; Titel aus dem Playoff-Finale (falls gespielt)
     const { stats, championName: firstPlace, viceChampionName: secondPlace } = computeFinalSwissStats(session);
 
+    // Leagues that already received this tournament (an earlier attempt stopped halfway) are skipped
+    const alreadyDone = session.transferredToLeagues ?? [];
+    const targetIds = leagueIds.filter(id => !alreadyDone.includes(id));
+
     const updatedLeagues = leagues.map(league => {
-      if (!leagueIds.includes(league.id)) return league;
+      if (!targetIds.includes(league.id)) return league;
       const updatedStats = [...league.playerStats];
 
       stats.forEach(stat => {
@@ -336,10 +345,37 @@ export default function SchweizSystem() {
       return { ...league, playerStats: updatedStats };
     });
 
-    setLeagues(updatedLeagues);
-    await saveLeagues(updatedLeagues);
+    // Save league by league and remember each one, so a repeated transfer never counts twice
+    let currentLeagues = leagues;
+    let currentSession = session;
+    for (const league of updatedLeagues.filter(l => targetIds.includes(l.id))) {
+      try {
+        await saveLeague(league);
+      } catch (err) {
+        console.error('Failed to save league:', err);
+        toast.error(
+          `Übertragung zu "${league.name}" fehlgeschlagen. Bitte erneut versuchen – bereits übertragene Ligen werden nicht doppelt gezählt.`
+        );
+        return;
+      }
+      currentLeagues = currentLeagues.map(l => (l.id === league.id ? league : l));
+      setLeagues(currentLeagues);
+      currentSession = {
+        ...currentSession,
+        transferredToLeagues: [...(currentSession.transferredToLeagues ?? []), league.id],
+      };
+      setSession(currentSession);
+    }
+
     // persist to history
-    await persistSwissToHistory(session);
+    const savedToHistory = await persistSwissToHistory({
+      ...currentSession,
+      transferredToLeagues: [...new Set([...alreadyDone, ...leagueIds])],
+    });
+    if (!savedToHistory) {
+      toast.error('Die Ligen sind aktualisiert, aber der Abend wurde nicht abgeschlossen. Bitte die Übertragung erneut starten – die Ligen werden nicht doppelt gezählt.');
+      return;
+    }
     saveSwissSession(null);
     setSession(null);
     setPlayers([]);
@@ -351,9 +387,14 @@ export default function SchweizSystem() {
       id: crypto.randomUUID(), name, year: new Date().getFullYear(),
       playerStats: [], createdAt: new Date().toISOString(),
     };
-    const updated = [...leagues, newLeague];
-    setLeagues(updated);
-    await saveLeagues(updated);
+    try {
+      await saveLeague(newLeague);
+    } catch (err) {
+      console.error('Failed to create league:', err);
+      toast.error('Die Liga konnte nicht gespeichert werden. Bitte erneut versuchen.');
+      return;
+    }
+    setLeagues([...leagues, newLeague]);
     toast.success(`Liga "${name}" erstellt`);
   };
 
@@ -845,6 +886,7 @@ export default function SchweizSystem() {
         stats={transferStats}
         onTransfer={handleTransferResults}
         onCreateLeague={handleCreateLeague}
+        transferredLeagueIds={session?.transferredToLeagues ?? []}
       />
     </div>
   );
