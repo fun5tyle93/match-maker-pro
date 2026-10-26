@@ -200,7 +200,7 @@ const sections: DocSection[] = [
     features: [
       { icon: Calendar,        title: 'Trainingsabende',        description: 'Verwalte Trainingsabende mit Spielerdaten, automatischer Paarungsgenerierung und Live-Ergebniseingabe. Ergebnisse können per Klick oder Enter-Taste bestätigt werden.', status: 'Aktiv' },
       { icon: Shuffle,         title: 'Paarungsgenerator',      description: 'Generiert automatisch faire Paarungen für alle angemeldeten Spieler eines Trainingsabends nach dem Round-Robin-Prinzip.', status: 'Aktiv' },
-      { icon: BarChart2,       title: 'Live-Tabelle',           description: 'Zeigt die aktuelle Tagesrangliste eines Trainingsabends in Echtzeit an – inklusive Tore, Punkte und Differenz.', status: 'Aktiv' },
+      { icon: BarChart2,       title: 'Tagestabelle',           description: 'Zeigt die aktuelle Tagesrangliste eines Trainingsabends und aktualisiert sich nach jedem eingetragenen Ergebnis – inklusive Tore, Punkte und Differenz.', status: 'Aktiv' },
       { icon: RefreshCw,       title: 'Training zurücksetzen',  description: 'Ermöglicht das Zurücksetzen eines laufenden Trainingsabends, um Spieler neu einzutragen oder Paarungen neu zu generieren.', status: 'Aktiv' },
     ],
   },
@@ -236,7 +236,6 @@ const sections: DocSection[] = [
     features: [
       { icon: AlertCircle, title: 'Spieler-Profil',          description: 'Eigene Seite pro Spieler mit Verlaufsdiagrammen und persönlichen Bestleistungen. Siegquote, Form und Direktvergleich gibt es schon unter Statistiken.', status: 'In Planung' },
       { icon: BarChart2,   title: 'Statistik-Diagramme',     description: 'Grafische Auswertungen zusätzlich zu den Tabellen: Verlauf der Siegquote und Tore pro Saison.', status: 'In Planung' },
-      { icon: ClockIcon,   title: 'Echtzeit-Updates',        description: 'Live-Synchronisation der Ergebnisse und Tabellen über Supabase Realtime – für alle Endgeräte gleichzeitig.', status: 'In Planung' },
     ],
   },
 ];

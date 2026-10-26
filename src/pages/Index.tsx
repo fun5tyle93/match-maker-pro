@@ -22,8 +22,8 @@ const Index = () => {
     },
     {
       icon: Calendar,
-      title: "Live-Tabelle",
-      description: "Echtzeit-Aktualisierung mit Meisterschafts-Tracking"
+      title: "Tagestabelle",
+      description: "Aktualisiert sich nach jedem eingetragenen Ergebnis"
     },
     {
       icon: Trophy,
