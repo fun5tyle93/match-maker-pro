@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { League, PlayerStats, Player } from '@/types';
-import { loadLeagues, saveLeagues } from '@/lib/storage';
+import { loadLeagues, saveLeague, deleteLeague } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportActions';
 import { cn } from '@/lib/utils';
@@ -78,6 +78,18 @@ const Leagues = () => {
     init();
   }, []);
 
+  // Saves first; the screen is only changed when the server confirmed it
+  const persistLeague = async (league: League): Promise<boolean> => {
+    try {
+      await saveLeague(league);
+      return true;
+    } catch (err) {
+      console.error('Failed to save league:', err);
+      toast.error('Speichern fehlgeschlagen. Es wurde nichts verändert – bitte erneut versuchen.');
+      return false;
+    }
+  };
+
   const handleCreateLeague = async () => {
     if (!newLeagueName.trim()) return;
 
@@ -89,9 +101,8 @@ const Leagues = () => {
       createdAt: new Date().toISOString(),
     };
 
-    const updatedLeagues = [...leagues, newLeague];
-    setLeagues(updatedLeagues);
-    await saveLeagues(updatedLeagues);
+    if (!(await persistLeague(newLeague))) return;
+    setLeagues([...leagues, newLeague]);
     setSelectedLeague(newLeague);
     setNewLeagueName('');
     setShowNewLeague(false);
@@ -99,9 +110,15 @@ const Leagues = () => {
   };
 
   const handleDeleteLeague = async (leagueId: string) => {
+    try {
+      await deleteLeague(leagueId);
+    } catch (err) {
+      console.error('Failed to delete league:', err);
+      toast.error('Die Liga konnte nicht gelöscht werden. Bitte erneut versuchen.');
+      return;
+    }
     const updatedLeagues = leagues.filter(l => l.id !== leagueId);
     setLeagues(updatedLeagues);
-    await saveLeagues(updatedLeagues);
     
     if (selectedLeague?.id === leagueId) {
       setSelectedLeague(updatedLeagues[0] || null);
@@ -171,8 +188,8 @@ const Leagues = () => {
     const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
     const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
     
+    if (!(await persistLeague(updatedLeague))) return;
     setLeagues(updatedLeagues);
-    await saveLeagues(updatedLeagues);
     setSelectedLeague(updatedLeague);
     setShowEditDialog(false);
     toast.success('Spieler aktualisiert');
@@ -185,8 +202,8 @@ const Leagues = () => {
     const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
     const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
     
+    if (!(await persistLeague(updatedLeague))) return;
     setLeagues(updatedLeagues);
-    await saveLeagues(updatedLeagues);
     setSelectedLeague(updatedLeague);
     toast.success('Spieler entfernt');
   };
@@ -217,8 +234,8 @@ const Leagues = () => {
     const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
     const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
     
+    if (!(await persistLeague(updatedLeague))) return;
     setLeagues(updatedLeagues);
-    await saveLeagues(updatedLeagues);
     setSelectedLeague(updatedLeague);
     setNewPlayerName('');
     setShowAddPlayer(false);

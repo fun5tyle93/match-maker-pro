@@ -41,7 +41,7 @@ export function exportTrainingToXLSX(session: TrainingSession): void {
   // Matches sheet grouped by round
   const matchesData = swissMatches.map(m => ({
     'Runde': m.round,
-    'Tisch': m.tableNumber ?? swissMatches.filter(match => match.round === m.round).indexOf(m) + 1,
+    'Platte': m.tableNumber ?? swissMatches.filter(match => match.round === m.round).indexOf(m) + 1,
     'Heim': m.homePlayer.name,
     'Ergebnis': m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-',
     'Gast': m.awayPlayer.name,
@@ -135,7 +135,7 @@ export async function exportTrainingToPDF(
   currentY = (doc as any).lastAutoTable.finalY + 8;
 
   // ============ MATCHES BY ROUND (Scaled layout for A4) ============
-  currentY = drawSectionHeader(doc, hasPlayoff ? 'Vorrunde – Spiele' : 'Spiele', currentY);
+  currentY = drawSectionHeader(doc, hasPlayoff ? 'Vorrunde – Spiele (P = Platte)' : 'Spiele (P = Platte)', currentY);
   
   const { pageWidth, pageHeight } = PDF_CONFIG;
   const contentWidth = pageWidth - (margin * 2);
@@ -204,7 +204,7 @@ export async function exportTrainingToPDF(
       
       // Draw match row
       doc.setTextColor(...PDF_COLORS.textMuted);
-      doc.text(`T${tableNum}`, xPos + 2, textY);
+      doc.text(`P${tableNum}`, xPos + 2, textY);
       
       doc.setTextColor(...PDF_COLORS.text);
       doc.text(homeText, xPos + (8 * scaleFactor), textY);

@@ -145,13 +145,16 @@ export const handleExportPDF = async (s: SwissSession | null) => {
   if (await exportTrainingToPDF(ts)) toast.success('PDF exportiert');
 };
 
-export const persistSwissToHistory = async (s: SwissSession) => {
+/** Saves the tournament in the history. Resolves to true when the server confirmed it. */
+export const persistSwissToHistory = async (s: SwissSession): Promise<boolean> => {
   try {
     const ts = { ...convertSwissToTrainingSession(s), isCompleted: true };
     await saveToHistory(ts);
     toast.success('Turnier in der Historie gespeichert');
+    return true;
   } catch (err) {
     console.error('Failed to save swiss to history', err);
     toast.error('Fehler beim Speichern in der Historie');
+    return false;
   }
 };

@@ -36,6 +36,7 @@ import { loadHistory, deleteFromHistory, saveToHistory } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
 import { groupMatchesByRound } from '@/lib/tables';
+import { pluralize } from '@/lib/plural';
 import { getSwissMatches, toPlayoffMatches, getPlayoffFinalists } from '@/lib/tournamentPhases';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
 
@@ -63,9 +64,14 @@ const History = () => {
   }, []);
 
   const handleDelete = async (sessionId: string) => {
-    await deleteFromHistory(sessionId);
-    setSessions(await loadHistory());
-    toast.success('Training aus Historie gelöscht');
+    try {
+      await deleteFromHistory(sessionId);
+      setSessions(await loadHistory());
+      toast.success('Training aus Historie gelöscht');
+    } catch (err) {
+      console.error('Failed to delete training:', err);
+      toast.error('Das Training konnte nicht gelöscht werden. Bitte erneut versuchen.');
+    }
   };
 
   const startEditingName = (session: TrainingSession) => {
@@ -78,8 +84,14 @@ const History = () => {
     if (!session) return;
 
     const updatedSession = { ...session, name: editSessionName.trim() || undefined };
-    await saveToHistory(updatedSession);
-    setSessions(await loadHistory());
+    try {
+      await saveToHistory(updatedSession);
+      setSessions(await loadHistory());
+    } catch (err) {
+      console.error('Failed to rename training:', err);
+      toast.error('Der Name konnte nicht gespeichert werden. Bitte erneut versuchen.');
+      return;
+    }
     setEditingSessionId(null);
     toast.success('Name aktualisiert');
   };
@@ -97,6 +109,7 @@ const History = () => {
         m.id === matchId ? { ...m, homeScore, awayScore, isCompleted: true } : m
       ),
     };
+    const previousSession = selectedSession;
     setSelectedSession(updatedSession);
     try {
       await saveToHistory(updatedSession);
@@ -104,7 +117,9 @@ const History = () => {
       toast.success('Ergebnis aktualisiert');
     } catch (err) {
       console.error('Failed to update match score:', err);
-      toast.error('Fehler beim Speichern des Ergebnisses');
+      // Show the saved result again instead of one that is not on the server
+      setSelectedSession(previousSession);
+      toast.error('Das Ergebnis konnte nicht gespeichert werden. Bitte erneut versuchen.');
     }
   };
 
@@ -240,8 +255,8 @@ const History = () => {
                             <Users className="w-4 h-4" />
                             {session.players.length} Spieler
                           </span>
-                          <span>{session.matches.length} Spiele</span>
-                          <span>{session.roundCount} Runden</span>
+                          <span>{pluralize(session.matches.length, 'Spiel', 'Spiele')}</span>
+                          <span>{pluralize(session.roundCount, 'Runde', 'Runden')}</span>
                         </div>
                         <p className="text-sm mt-2">
                           <span className="text-accent font-semibold">
