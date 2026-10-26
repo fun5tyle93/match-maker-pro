@@ -1,12 +1,69 @@
 import { Player, Match, PlayerStats } from '@/types';
 
-function shuffleArray<T>(array: T[]): T[] {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+// Larger than any balance cost, so a pairing only repeats a table when it cannot be avoided
+const REPEAT_PENALTY = 1000;
+
+function pairKey(a: Player, b: Player): string {
+  return [a.id, b.id].sort().join('|');
+}
+
+/**
+ * Minimum-cost assignment of rows to columns (Hungarian algorithm) for a square matrix.
+ * Returns, for each row, the index of the column it is assigned to.
+ */
+function assignMinCost(cost: number[][]): number[] {
+  const n = cost.length;
+  const u = new Array(n + 1).fill(0);
+  const v = new Array(n + 1).fill(0);
+  const p = new Array(n + 1).fill(0); // p[j] = row currently assigned to column j (1-based)
+  const way = new Array(n + 1).fill(0);
+
+  for (let i = 1; i <= n; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array(n + 1).fill(Infinity);
+    const used = new Array(n + 1).fill(false);
+
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = Infinity;
+      let j1 = 0;
+      for (let j = 1; j <= n; j++) {
+        if (used[j]) continue;
+        const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
+        if (cur < minv[j]) {
+          minv[j] = cur;
+          way[j] = j0;
+        }
+        if (minv[j] < delta) {
+          delta = minv[j];
+          j1 = j;
+        }
+      }
+      for (let j = 0; j <= n; j++) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else {
+          minv[j] -= delta;
+        }
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0 !== 0);
   }
-  return shuffled;
+
+  const assignment = new Array(n).fill(-1);
+  for (let j = 1; j <= n; j++) {
+    if (p[j] !== 0) assignment[p[j] - 1] = j - 1;
+  }
+  return assignment;
 }
 
 // Calculate matches per round based on player count (optimized for odd numbers)
@@ -50,8 +107,11 @@ export function generatePairings(
   const whiteCount: Record<string, number> = {};
   const lastRole: Record<string, 'home' | 'away' | null> = {};
   const tableCount: Record<string, Record<number, number>> = {};
+  // pairTableUse: how often a pairing (by player ids) was already played on each table
+  const pairTableUse: Record<string, Record<number, number>> = {};
 
-  const numTables = Math.floor(numPlayers / 2);
+  // One table per match in a round (the BYE pair of an odd field plays no match)
+  const numTables = Math.floor(n / 2);
 
   // Initialize tracking for ALL players (including BYE)
   allPlayers.forEach(p => {
@@ -102,66 +162,53 @@ export function generatePairings(
           : { home: p2, away: p1 };
       });
 
-      // --- Assign tables fairly via randomized scoring ---
-      // CRITICAL FIX: Shuffle table indices FOR EACH ROUND to ensure uniform distribution
-      // This ensures that tables are randomly distributed per round, not fixed by pair order
-      const tableIndices = shuffleArray(
-        Array.from({ length: sidesAssigned.length }, (_, i) => i)
-      );
-
-      // For each pair, find the table index where both players have played the least
-      // We use a greedy assignment on the shuffled indices to add randomness while
-      // still respecting the balance objective.
-      const usedTables = new Set<number>();
-      const assignedTables: number[] = new Array(sidesAssigned.length).fill(-1);
-
-      // Build a cost matrix: cost[pair][tableIdx] = sum of tableCount for both players
-      for (let pairIdx = 0; pairIdx < sidesAssigned.length; pairIdx++) {
-        const { home, away } = sidesAssigned[pairIdx];
-
-        // Among still-available tables, pick the one both players have visited least
-        let bestTable = -1;
-        let bestCost = Infinity;
-        // Shuffle candidate tables to break ties randomly
-        const candidates = shuffleArray(tableIndices.filter(t => !usedTables.has(t)));
-
-        for (const t of candidates) {
-          const cost =
-            (tableCount[home.id][t] ?? 0) +
-            (tableCount[away.id][t] ?? 0) +
-            Math.random() * 0.5; // small random jitter for ties
-          if (cost < bestCost) {
-            bestCost = cost;
-            bestTable = t;
-          }
-        }
-
-        assignedTables[pairIdx] = bestTable;
-        usedTables.add(bestTable);
-      }
-
-      // Commit matches and update trackers
-      sidesAssigned.forEach(({ home, away }, pairIdx) => {
-        const tableIdx = assignedTables[pairIdx];
-
-        whiteCount[home.id]++;
-        lastRole[home.id] = 'home';
-        lastRole[away.id] = 'away';
-
-        if (tableCount[home.id][tableIdx] !== undefined) tableCount[home.id][tableIdx]++;
-        if (tableCount[away.id][tableIdx] !== undefined) tableCount[away.id][tableIdx]++;
-
-        matches.push({
-          id: matchId(),
-          round: roundNumber,
-          homePlayer: home,
-          awayPlayer: away,
-          homeScore: null,
-          awayScore: null,
-          isCompleted: false,
-          tableNumber: tableIdx + 1,
-        });
+      // --- Assign tables: optimal assignment of pairs to tables ---
+      // Cost of putting a pair on a table:
+      //  * balance:   how often both players already played that table
+      //  * no repeat: a pairing that already played on that table (earlier
+      //    repetition) pays REPEAT_PENALTY, so it moves to another table
+      //    whenever a different assignment exists
+      //  * jitter:    breaks ties randomly
+      // All pairs are assigned at once, so no pair gets priority over the others.
+      const pairCount = sidesAssigned.length;
+      const costMatrix = sidesAssigned.map(({ home, away }) => {
+        const key = pairKey(home, away);
+        return Array.from({ length: pairCount }, (_, t) =>
+          (tableCount[home.id][t] ?? 0) +
+          (tableCount[away.id][t] ?? 0) +
+          REPEAT_PENALTY * (pairTableUse[key]?.[t] ?? 0) +
+          Math.random() * 0.05
+        );
       });
+      const assignedTables = assignMinCost(costMatrix);
+
+      // Commit matches (in table order) and update trackers
+      sidesAssigned
+        .map(({ home, away }, pairIdx) => ({ home, away, tableIdx: assignedTables[pairIdx] }))
+        .sort((a, b) => a.tableIdx - b.tableIdx)
+        .forEach(({ home, away, tableIdx }) => {
+          whiteCount[home.id]++;
+          lastRole[home.id] = 'home';
+          lastRole[away.id] = 'away';
+
+          if (tableCount[home.id][tableIdx] !== undefined) tableCount[home.id][tableIdx]++;
+          if (tableCount[away.id][tableIdx] !== undefined) tableCount[away.id][tableIdx]++;
+
+          const key = pairKey(home, away);
+          pairTableUse[key] = pairTableUse[key] ?? {};
+          pairTableUse[key][tableIdx] = (pairTableUse[key][tableIdx] ?? 0) + 1;
+
+          matches.push({
+            id: matchId(),
+            round: roundNumber,
+            homePlayer: home,
+            awayPlayer: away,
+            homeScore: null,
+            awayScore: null,
+            isCompleted: false,
+            tableNumber: tableIdx + 1,
+          });
+        });
 
       // Rotate the circle (keep fixed[0], rotate rest)
       const last = rotatingCopy.pop()!;

@@ -35,6 +35,7 @@ import { TrainingSession, Match } from '@/types';
 import { loadHistory, deleteFromHistory, saveToHistory } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
+import { groupMatchesByRound } from '@/lib/tables';
 import { getSwissMatches, toPlayoffMatches, getPlayoffFinalists } from '@/lib/tournamentPhases';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 
@@ -122,14 +123,6 @@ const History = () => {
       month: '2-digit',
       year: 'numeric',
     });
-  };
-
-  const groupMatchesByRound = (matches: Match[]) => {
-    return matches.reduce((acc, match) => {
-      if (!acc[match.round]) acc[match.round] = [];
-      acc[match.round].push(match);
-      return acc;
-    }, {} as Record<number, Match[]>);
   };
 
   if (loading) {
@@ -379,6 +372,7 @@ const History = () => {
                                 match={match}
                                 onUpdateScore={handleUpdateMatchScore}
                                 readonly={!isAdmin}
+                                tableNumber={match.tableNumber}
                               />
                             ))}
                           </div>
