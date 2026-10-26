@@ -36,6 +36,7 @@ export const PDF_CONFIG = {
   pageHeight: 297, // A4 height in mm
   margin: 12,
   headerHeight: 22,
+  footerHeight: 10,
   fontSize: {
     title: 16,
     subtitle: 12,
@@ -102,7 +103,8 @@ export function createStyledPDF(title: string, subtitle?: string, logoBase64?: s
 // Load logo as base64 for PDF embedding
 export async function loadLogoBase64(): Promise<string | null> {
   try {
-    const response = await fetch('/images/tkc71-logo.png');
+    // Small copy of the logo: the original is 1.2 MB and would make every export that large
+    const response = await fetch('/images/tkc71-logo-export.png');
     const blob = await response.blob();
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -209,4 +211,57 @@ export function getRankColorPDF(rank: number): [number, number, number] {
     case 3: return PDF_COLORS.bronze;
     default: return PDF_COLORS.text;
   }
+}
+
+/**
+ * Fits a text into a width (mm) at the current font: the font size shrinks down to
+ * minFontSize, then the text is cut and ends with "...". Keeps long names out of the score.
+ */
+export function fitText(
+  doc: jsPDF,
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+  minFontSize = 5.5,
+): { text: string; fontSize: number } {
+  doc.setFontSize(fontSize);
+  const width = doc.getTextWidth(text);
+  if (width <= maxWidth) return { text, fontSize };
+
+  // Shrink in small steps: the measured width is not exactly proportional to the font size
+  let shrunk = Math.max(minFontSize, (fontSize * maxWidth) / width);
+  doc.setFontSize(shrunk);
+  while (doc.getTextWidth(text) > maxWidth && shrunk > minFontSize) {
+    shrunk = Math.max(minFontSize, shrunk - 0.25);
+    doc.setFontSize(shrunk);
+  }
+  if (doc.getTextWidth(text) <= maxWidth) return { text, fontSize: shrunk };
+
+  let cut = text;
+  while (cut.length > 1 && doc.getTextWidth(cut + '...') > maxWidth) {
+    cut = cut.slice(0, -1);
+  }
+  return { text: cut.trimEnd() + '...', fontSize: shrunk };
+}
+
+/** Draws "TKC71 Hirschlanden", "Seite x von y" and the creation date on every page. Call once, after all content. */
+export function drawFooters(doc: jsPDF, createdOn: string): void {
+  const { pageWidth, pageHeight, margin } = PDF_CONFIG;
+  const total = doc.getNumberOfPages();
+  const y = pageHeight - 6;
+
+  for (let page = 1; page <= total; page++) {
+    doc.setPage(page);
+    doc.setDrawColor(...PDF_COLORS.border);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y - 4, pageWidth - margin, y - 4);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(PDF_CONFIG.fontSize.small);
+    doc.setTextColor(...PDF_COLORS.textMuted);
+    doc.text('TKC71 Hirschlanden', margin, y);
+    doc.text(`Seite ${page} von ${total}`, pageWidth / 2, y, { align: 'center' });
+    doc.text(`Erstellt am ${createdOn}`, pageWidth - margin, y, { align: 'right' });
+  }
+  doc.setTextColor(...PDF_COLORS.text);
 }
