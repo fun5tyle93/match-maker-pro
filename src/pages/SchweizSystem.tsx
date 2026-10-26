@@ -33,6 +33,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { loadLeagues, saveLeague } from '@/lib/storage';
 import { cn } from '@/lib/utils';
+import { pluralize } from '@/lib/plural';
 import { handleExportXLSX, handleExportPDF, persistSwissToHistory, convertSwissToTrainingSession, computeFinalSwissStats } from '@/pages/swissHelpers';
 
 const STORAGE_KEY = 'swiss-session-v1';
@@ -143,7 +144,7 @@ export default function SchweizSystem() {
     const sessionWithR1 = advanceToNextRound(newSession);
     setSession(sessionWithR1);
     setExpandedRounds(['1']);
-    toast.success(`Schweizer System gestartet – ${config.rounds} Runden geplant`);
+    toast.success(`Schweizer System gestartet – ${pluralize(config.rounds, 'Runde', 'Runden')} geplant`);
   };
 
   // ─── Generate next round ──────────────────────────────────────────────
@@ -460,7 +461,7 @@ export default function SchweizSystem() {
                       <span>2</span><span>10</span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Empfehlung: ⌈log₂(n)⌉ = {Math.ceil(Math.log2(Math.max(players.length, 2)))} Runden für {players.length} Spieler
+                      Empfehlung: ⌈log₂(n)⌉ = {pluralize(Math.ceil(Math.log2(Math.max(players.length, 2))), 'Runde', 'Runden')} für {pluralize(players.length, 'Spieler', 'Spieler')}
                     </p>
                   </div>
 

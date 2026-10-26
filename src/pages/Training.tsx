@@ -22,6 +22,7 @@ import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { generatePairings, calculatePlayerStats } from '@/lib/pairingGenerator';
 import { groupMatchesByRound } from '@/lib/tables';
+import { pluralize } from '@/lib/plural';
 import { useSessionAutosave, findRestorableBackup, clearBackup } from '@/hooks/useSessionAutosave';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
 import {
@@ -124,7 +125,9 @@ const Training = () => {
     setExpandedRounds([1]);
     
     const maxRounds = players.length - 1;
-    toast.success(`${matches.length} Spiele in ${roundCount} Runden generiert (Round-Robin: max ${maxRounds} Runden pro Durchgang)`);
+    toast.success(
+      `${pluralize(matches.length, 'Spiel', 'Spiele')} in ${pluralize(roundCount, 'Runde', 'Runden')} generiert (Round-Robin: max ${pluralize(maxRounds, 'Runde', 'Runden')} pro Durchgang)`
+    );
   };
 
   const handleUpdateScore = (matchId: string, homeScore: number, awayScore: number) => {
@@ -156,7 +159,7 @@ const Training = () => {
 
     const incompleteMatches = session.matches.filter(m => !m.isCompleted);
     if (incompleteMatches.length > 0) {
-      toast.error(`Noch ${incompleteMatches.length} Spiele offen`);
+      toast.error(`Noch ${pluralize(incompleteMatches.length, 'Spiel', 'Spiele')} offen`);
       return;
     }
 
@@ -455,7 +458,7 @@ const Training = () => {
                         className="mt-1 w-24"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Round-Robin: Jeder gegen jeden. Bei {players.length} Spielern = {Math.max(0, players.length - 1)} Runden pro Durchgang.
+                        Round-Robin: Jeder gegen jeden. Bei {pluralize(players.length, 'Spieler', 'Spielern')} = {pluralize(Math.max(0, players.length - 1), 'Runde', 'Runden')} pro Durchgang.
                       </p>
                     </div>
                   </CardContent>

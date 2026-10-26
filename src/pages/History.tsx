@@ -36,6 +36,7 @@ import { loadHistory, deleteFromHistory, saveToHistory } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
 import { groupMatchesByRound } from '@/lib/tables';
+import { pluralize } from '@/lib/plural';
 import { getSwissMatches, toPlayoffMatches, getPlayoffFinalists } from '@/lib/tournamentPhases';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
 
@@ -254,8 +255,8 @@ const History = () => {
                             <Users className="w-4 h-4" />
                             {session.players.length} Spieler
                           </span>
-                          <span>{session.matches.length} Spiele</span>
-                          <span>{session.roundCount} Runden</span>
+                          <span>{pluralize(session.matches.length, 'Spiel', 'Spiele')}</span>
+                          <span>{pluralize(session.roundCount, 'Runde', 'Runden')}</span>
                         </div>
                         <p className="text-sm mt-2">
                           <span className="text-accent font-semibold">
