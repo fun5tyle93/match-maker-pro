@@ -217,6 +217,7 @@ const sections: DocSection[] = [
     label: 'Historie & Auswertung',
     features: [
       { icon: History,         title: 'Historienansicht',  description: 'Bietet einen Überblick über alle vergangenen Trainingsabende und Meisterschaften mit den jeweiligen Endständen.', status: 'Aktiv' },
+      { icon: BarChart2,       title: 'Statistiken',       description: 'Eigener Bereich mit Auswertungen aus allen abgeschlossenen Trainings: Abende, Spiele, Siegquote, ∅ Punkte, Tordifferenz, gewonnene Abende, Form der letzten fünf Spiele und Direktvergleich zweier Spieler – für alle Jahre oder einzeln.', status: 'Aktiv' },
       { icon: FileDown,        title: 'PDF-Export',        description: 'Exportiert die aktuelle Tabelle oder den Spielplan als sauber formatiertes PDF, inklusive TKC71-Branding.', status: 'Aktiv' },
       { icon: Globe,           title: 'Excel / CSV-Export', description: 'Ermöglicht den Export von Statistiken und Tabellendaten im Excel-Format für externe Auswertungen.', status: 'Aktiv' },
     ],
@@ -233,8 +234,8 @@ const sections: DocSection[] = [
   {
     label: 'In Entwicklung',
     features: [
-      { icon: AlertCircle, title: 'Spieler-Profil',          description: 'Individuelles Profil pro Spieler mit vollständiger Karrierestatistik, Verlaufsdiagrammen und persönlichen Bestleistungen.', status: 'In Planung' },
-      { icon: BarChart2,   title: 'Statistik-Dashboard',     description: 'Interaktive Charts und Auswertungen: Formkurven, Tore pro Saison, Kopf-an-Kopf-Vergleiche und mehr.', status: 'In Planung' },
+      { icon: AlertCircle, title: 'Spieler-Profil',          description: 'Eigene Seite pro Spieler mit Verlaufsdiagrammen und persönlichen Bestleistungen. Siegquote, Form und Direktvergleich gibt es schon unter Statistiken.', status: 'In Planung' },
+      { icon: BarChart2,   title: 'Statistik-Diagramme',     description: 'Grafische Auswertungen zusätzlich zu den Tabellen: Verlauf der Siegquote und Tore pro Saison.', status: 'In Planung' },
       { icon: ClockIcon,   title: 'Echtzeit-Updates',        description: 'Live-Synchronisation der Ergebnisse und Tabellen über Supabase Realtime – für alle Endgeräte gleichzeitig.', status: 'In Planung' },
     ],
   },

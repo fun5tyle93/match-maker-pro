@@ -11,6 +11,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 // Pages load on demand so the first screen does not pull in jsPDF, XLSX and Recharts.
 const Training = lazy(() => import("./pages/Training"));
 const Leagues = lazy(() => import("./pages/Leagues"));
+const Statistics = lazy(() => import("./pages/Statistics"));
 const History = lazy(() => import("./pages/History"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Dokumentation = lazy(() => import("./pages/Dokumentation"));
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/training" element={<Training />} />
               <Route path="/leagues" element={<Leagues />} />
+              <Route path="/statistiken" element={<Statistics />} />
               <Route path="/history" element={<History />} />
               <Route path="/dokumentation" element={<Dokumentation />} />
               <Route path="/schweizer-system" element={<SchweizSystem />} />
