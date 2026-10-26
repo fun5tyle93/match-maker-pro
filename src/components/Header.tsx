@@ -1,5 +1,5 @@
 import { NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
-import { Trophy, Calendar, Home, History, LogOut, LogIn, BookOpen, GitBranch } from 'lucide-react';
+import { Trophy, Calendar, Home, History, LogOut, LogIn, BookOpen, GitBranch, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TippKickBall } from './TippKickBall';
 import tkc71Logo from '@/assets/tkc71-logo.jpeg';
@@ -10,7 +10,9 @@ import { toast } from 'sonner';
 export function Header() {
   const { isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
-  const linkClass = "flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-200 text-sm";
+  // Seven menu items plus the login need about 1220 px with labels and title: the labels start at lg
+  // (1024 px), the title at xl (1280 px); below that only icons are shown, with tighter spacing on phones.
+  const linkClass = "flex items-center gap-2 px-2 max-[359px]:px-1.5 lg:px-3 py-2 rounded-lg font-medium transition-all duration-200 text-sm";
   const activeClass = "bg-primary/20 text-primary";
   const inactiveClass = "text-muted-foreground hover:text-foreground hover:bg-secondary";
 
@@ -25,7 +27,7 @@ export function Header() {
         <div className="flex items-center justify-between h-16">
           <RouterNavLink to="/" className="flex items-center gap-3 group">
             <TippKickBall size="md" className="group-hover:scale-110 transition-transform" />
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="hidden xl:flex items-center gap-2">
               <span className="font-display text-lg tracking-wide text-foreground">
                 TIPP-KICK MEISTERSCHAFTSTOOL
               </span>
@@ -37,49 +39,56 @@ export function Header() {
             </div>
           </RouterNavLink>
 
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-0.5 lg:gap-1">
             <RouterNavLink
               to="/"
               end
               className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
             >
               <Home className="w-4 h-4" />
-              <span className="hidden sm:inline">Start</span>
+              <span className="hidden lg:inline">Start</span>
             </RouterNavLink>
             <RouterNavLink
               to="/training"
               className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
             >
               <Calendar className="w-4 h-4" />
-              <span className="hidden sm:inline">Training</span>
+              <span className="hidden lg:inline">Training</span>
             </RouterNavLink>
             <RouterNavLink
               to="/history"
               className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
             >
               <History className="w-4 h-4" />
-              <span className="hidden sm:inline">Historie</span>
+              <span className="hidden lg:inline">Historie</span>
             </RouterNavLink>
             <RouterNavLink
               to="/leagues"
               className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
             >
               <Trophy className="w-4 h-4" />
-              <span className="hidden sm:inline">Ligen</span>
+              <span className="hidden lg:inline">Ligen</span>
+            </RouterNavLink>
+            <RouterNavLink
+              to="/statistiken"
+              className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span className="hidden lg:inline">Statistiken</span>
             </RouterNavLink>
             <RouterNavLink
               to="/dokumentation"
               className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
             >
               <BookOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">Doku</span>
+              <span className="hidden lg:inline">Doku</span>
             </RouterNavLink>
             <RouterNavLink
               to="/schweizer-system"
               className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
             >
               <GitBranch className="w-4 h-4" />
-              <span className="hidden sm:inline">Schweizer</span>
+              <span className="hidden lg:inline">Schweizer</span>
             </RouterNavLink>
 
             {isAdmin ? (
@@ -87,22 +96,22 @@ export function Header() {
                 variant="ghost"
                 size="sm"
                 onClick={handleSignOut}
-                className="gap-2 text-muted-foreground hover:text-foreground ml-1"
+                className="gap-2 px-2 max-[359px]:px-1.5 lg:px-3 text-muted-foreground hover:text-foreground ml-0.5 lg:ml-1"
                 title="Abmelden"
               >
                 <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">Abmelden</span>
+                <span className="hidden lg:inline">Abmelden</span>
               </Button>
             ) : (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate('/admin')}
-                className="gap-2 text-muted-foreground hover:text-foreground ml-1"
+                className="gap-2 px-2 max-[359px]:px-1.5 lg:px-3 text-muted-foreground hover:text-foreground ml-0.5 lg:ml-1"
                 title="Admin-Login"
               >
                 <LogIn className="w-4 h-4" />
-                <span className="hidden sm:inline text-xs">Admin</span>
+                <span className="hidden lg:inline text-xs">Admin</span>
               </Button>
             )}
           </nav>
