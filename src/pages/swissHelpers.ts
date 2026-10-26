@@ -1,5 +1,5 @@
 import { saveToHistory } from '@/lib/storage';
-import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
+import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
 import { TrainingSession, PlayerStats, Match } from '@/types';
 import { SwissSession } from '@/types/swiss';
 import { computeSwissStats } from '@/lib/swissPairing';
@@ -133,18 +133,16 @@ export function computeFinalSwissStats(s: SwissSession): {
 }
 
 // Expose export helpers in the page via handlers
-export const handleExportXLSX = (s: SwissSession | null) => {
+export const handleExportXLSX = async (s: SwissSession | null) => {
   if (!s) return;
   const ts = convertSwissToTrainingSession(s);
-  exportTrainingToXLSX(ts);
-  toast.success('XLSX exportiert');
+  if (await exportTrainingToXLSX(ts)) toast.success('XLSX exportiert');
 };
 
-export const handleExportPDF = (s: SwissSession | null) => {
+export const handleExportPDF = async (s: SwissSession | null) => {
   if (!s) return;
   const ts = convertSwissToTrainingSession(s);
-  exportTrainingToPDF(ts);
-  toast.success('PDF exportiert');
+  if (await exportTrainingToPDF(ts)) toast.success('PDF exportiert');
 };
 
 export const persistSwissToHistory = async (s: SwissSession) => {
