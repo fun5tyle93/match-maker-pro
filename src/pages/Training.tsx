@@ -21,7 +21,7 @@ import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { generatePairings, calculatePlayerStats } from '@/lib/pairingGenerator';
 import { groupMatchesByRound } from '@/lib/tables';
-import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
+import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
 import {
   loadCurrentSession,
   saveCurrentSession,
@@ -321,16 +321,14 @@ const Training = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => {
-                    exportTrainingToXLSX(session);
-                    toast.success('XLSX exportiert');
+                  <DropdownMenuItem onClick={async () => {
+                    if (await exportTrainingToXLSX(session)) toast.success('XLSX exportiert');
                   }}>
                     <FileSpreadsheet className="w-4 h-4 mr-2" />
                     Als XLSX
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    exportTrainingToPDF(session);
-                    toast.success('PDF exportiert');
+                  <DropdownMenuItem onClick={async () => {
+                    if (await exportTrainingToPDF(session)) toast.success('PDF exportiert');
                   }}>
                     <FileText className="w-4 h-4 mr-2" />
                     Als PDF

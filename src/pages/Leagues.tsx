@@ -34,7 +34,7 @@ import { Label } from '@/components/ui/label';
 import { League, PlayerStats, Player } from '@/types';
 import { loadLeagues, saveLeagues } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
-import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportUtils';
+import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportActions';
 import { cn } from '@/lib/utils';
 
 const Leagues = () => {
@@ -381,16 +381,14 @@ const Leagues = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => {
-                              exportLeagueToXLSX(selectedLeague);
-                              toast.success('XLSX exportiert');
+                            <DropdownMenuItem onClick={async () => {
+                              if (await exportLeagueToXLSX(selectedLeague)) toast.success('XLSX exportiert');
                             }}>
                               <FileSpreadsheet className="w-4 h-4 mr-2" />
                               Als XLSX
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              exportLeagueToPDF(selectedLeague);
-                              toast.success('PDF exportiert');
+                            <DropdownMenuItem onClick={async () => {
+                              if (await exportLeagueToPDF(selectedLeague)) toast.success('PDF exportiert');
                             }}>
                               <FileText className="w-4 h-4 mr-2" />
                               Als PDF

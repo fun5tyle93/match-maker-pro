@@ -37,7 +37,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
 import { groupMatchesByRound } from '@/lib/tables';
 import { getSwissMatches, toPlayoffMatches, getPlayoffFinalists } from '@/lib/tournamentPhases';
-import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
+import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
 
 const History = () => {
   const { isAdmin } = useAuth();
@@ -275,16 +275,14 @@ const History = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => {
-                              exportTrainingToXLSX(session);
-                              toast.success('XLSX exportiert');
+                            <DropdownMenuItem onClick={async () => {
+                              if (await exportTrainingToXLSX(session)) toast.success('XLSX exportiert');
                             }}>
                               <FileSpreadsheet className="w-4 h-4 mr-2" />
                               Als XLSX
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              exportTrainingToPDF(session);
-                              toast.success('PDF exportiert');
+                            <DropdownMenuItem onClick={async () => {
+                              if (await exportTrainingToPDF(session)) toast.success('PDF exportiert');
                             }}>
                               <FileText className="w-4 h-4 mr-2" />
                               Als PDF
