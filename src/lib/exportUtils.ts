@@ -2,6 +2,7 @@ import * as XLSX from '@e965/xlsx';
 import autoTable from 'jspdf-autotable';
 import { TrainingSession, League, Match } from '@/types';
 import { calculatePlayerStats } from './pairingGenerator';
+import { sortMatches, groupMatchesByRound } from './tables';
 import { getSwissMatches, toPlayoffMatches, playoffMatchWinner } from './tournamentPhases';
 import { getRoundName } from './swissPairing';
 import {
@@ -17,17 +18,9 @@ import {
 } from './pdfStyles';
 
 // Helper to group matches by round
-function groupMatchesByRound(matches: Match[]): Record<number, Match[]> {
-  return matches.reduce((acc, match) => {
-    if (!acc[match.round]) acc[match.round] = [];
-    acc[match.round].push(match);
-    return acc;
-  }, {} as Record<number, Match[]>);
-}
-
 // Export training session to XLSX
 export function exportTrainingToXLSX(session: TrainingSession): void {
-  const swissMatches = getSwissMatches(session.matches);
+  const swissMatches = sortMatches(getSwissMatches(session.matches));
   const playoffMatches = toPlayoffMatches(session.matches);
   const hasPlayoff = playoffMatches.length > 0;
   const stats = calculatePlayerStats(session.players, swissMatches);
@@ -48,7 +41,7 @@ export function exportTrainingToXLSX(session: TrainingSession): void {
   // Matches sheet grouped by round
   const matchesData = swissMatches.map(m => ({
     'Runde': m.round,
-    'Tisch': swissMatches.filter(match => match.round === m.round).indexOf(m) + 1,
+    'Tisch': m.tableNumber ?? swissMatches.filter(match => match.round === m.round).indexOf(m) + 1,
     'Heim': m.homePlayer.name,
     'Ergebnis': m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-',
     'Gast': m.awayPlayer.name,
@@ -202,7 +195,7 @@ export async function exportTrainingToPDF(
     doc.setFont('helvetica', 'normal');
     
     matches.forEach((match, mIdx) => {
-      const tableNum = mIdx + 1;
+      const tableNum = match.tableNumber ?? mIdx + 1;
       const homeText = match.homePlayer.name;
       const awayText = match.awayPlayer.name;
       const scoreText = match.isCompleted ? `${match.homeScore}:${match.awayScore}` : '-:-';

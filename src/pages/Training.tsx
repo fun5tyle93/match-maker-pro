@@ -20,6 +20,7 @@ import {
 import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { generatePairings, calculatePlayerStats } from '@/lib/pairingGenerator';
+import { groupMatchesByRound } from '@/lib/tables';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportUtils';
 import {
   loadCurrentSession,
@@ -286,13 +287,7 @@ const Training = () => {
   };
 
   const stats = session ? calculatePlayerStats(session.players, session.matches) : [];
-  const matchesByRound = session
-    ? session.matches.reduce((acc, match) => {
-        if (!acc[match.round]) acc[match.round] = [];
-        acc[match.round].push(match);
-        return acc;
-      }, {} as Record<number, Match[]>)
-    : {};
+  const matchesByRound = session ? groupMatchesByRound(session.matches) : {};
 
   const allMatchesComplete = session?.matches.every(m => m.isCompleted) ?? false;
 

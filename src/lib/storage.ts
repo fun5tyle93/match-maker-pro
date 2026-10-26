@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { TrainingSession, League, Player, Match, PlayerStats } from '@/types';
+import { sortMatches } from '@/lib/tables';
 
 // ─── Helper: Fetch all rows, paging past the PostgREST row limit (default 1000) ───
 
@@ -211,9 +212,7 @@ export async function loadHistory(): Promise<TrainingSession[]> {
         id: p.player_id,
         name: p.player_name,
       }));
-      const matches: Match[] = (matchesBySession.get(row.id) ?? [])
-        .map(toMatch)
-        .sort((a, b) => a.round - b.round || (a.tableNumber ?? 0) - (b.tableNumber ?? 0));
+      const matches: Match[] = sortMatches((matchesBySession.get(row.id) ?? []).map(toMatch));
       return toSession(row, players, matches);
     });
   } catch (err) {
@@ -324,7 +323,7 @@ async function loadSessionById(sessionId: string): Promise<TrainingSession | nul
     .order('round', { ascending: true });
 
   const players: Player[] = (playerRows ?? []).map(p => ({ id: p.player_id, name: p.player_name }));
-  const matches: Match[] = (matchRows ?? []).map(toMatch);
+  const matches: Match[] = sortMatches((matchRows ?? []).map(toMatch));
 
   return toSession(row, players, matches);
 }
