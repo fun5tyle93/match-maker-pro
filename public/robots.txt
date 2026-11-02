@@ -1,14 +1,34 @@
+# Die Seite soll nicht in Suchmaschinen erscheinen.
+# Dafür steht "noindex" im HTML (index.html) und im Header "X-Robots-Tag" (vercel.json).
+# Google und Bing dürfen die Seite trotzdem lesen, damit sie das "noindex" sehen und
+# bereits bekannte Adressen wieder vergessen. Alle anderen Suchroboter sind ausgesperrt.
 User-agent: Googlebot
 Allow: /
 
 User-agent: Bingbot
 Allow: /
 
-User-agent: Twitterbot
-Allow: /
-
+# Vorschau beim Teilen des Links (WhatsApp, Facebook, Telegram, Slack, ...)
 User-agent: facebookexternalhit
 Allow: /
 
-User-agent: *
+User-agent: Twitterbot
 Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: TelegramBot
+Allow: /
+
+User-agent: Slackbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: Discordbot
+Allow: /
+
+User-agent: *
+Disallow: /
