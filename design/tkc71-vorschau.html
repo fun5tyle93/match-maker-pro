@@ -1,0 +1,41 @@
+<!doctype html>
+<!--
+  Vorlage für das Vorschaubild beim Teilen des Links (WhatsApp, Facebook, ...).
+  Es wirbt für den Verein und enthält bewusst keine Internetadresse.
+  Neu erzeugen: Seite in einem Browser mit Fenstergröße 1200 x 630 öffnen, Screenshot als
+  public/images/tkc71-vorschau.png speichern (nach "npm install", die Schriften kommen aus node_modules).
+-->
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face { font-family: 'Oswald'; font-weight: 700; src: url('../node_modules/@fontsource/oswald/files/oswald-latin-700-normal.woff2') format('woff2'); }
+      @font-face { font-family: 'Oswald'; font-weight: 500; src: url('../node_modules/@fontsource/oswald/files/oswald-latin-500-normal.woff2') format('woff2'); }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 1200px; height: 630px; overflow: hidden; }
+      body {
+        background: #EAB308;           /* Gelb des Vereins, wie die Kopfzeile der PDFs */
+        font-family: 'Oswald', sans-serif;
+        color: #1F2937;
+        position: relative;
+      }
+      .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; background: #DC2626; }  /* roter Streifen */
+      .logo { position: absolute; left: 96px; top: 91px; width: 420px; height: 420px; }
+      .text { position: absolute; left: 600px; top: 0; bottom: 22px; right: 60px; display: flex; flex-direction: column; justify-content: center; }
+      .tkc { font-weight: 700; font-size: 196px; line-height: 0.95; letter-spacing: 0.01em; }
+      .ort { font-weight: 700; font-size: 72px; line-height: 1.1; letter-spacing: 0.06em; margin-top: 6px; }
+      .strich { width: 150px; height: 10px; background: #DC2626; margin: 28px 0 24px; }
+      .tippkick { font-weight: 500; font-size: 56px; letter-spacing: 0.22em; color: #991B1B; }
+    </style>
+  </head>
+  <body>
+    <img class="logo" src="../public/images/tkc71-logo.png" alt="" />
+    <div class="text">
+      <div class="tkc">TKC71</div>
+      <div class="ort">HIRSCHLANDEN</div>
+      <div class="strich"></div>
+      <div class="tippkick">TIPP-KICK</div>
+    </div>
+    <div class="bar"></div>
+  </body>
+</html>
