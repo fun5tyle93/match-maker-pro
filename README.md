@@ -1,5 +1,49 @@
 # Match Maker Pro
 
+Meisterschaftstool des **TKC71 Hirschlanden** für Tipp-Kick: Trainingsabende mit automatischer Paarungsgenerierung (Round Robin und Schweizer System mit Playoffs), Ligen (Gesamttabellen), Statistiken und Exporte als PDF und Excel.
+
+**Live-App:** https://match-maker-pro.vercel.app
+
+## Funktionen
+
+- **Training:** Spieler erfassen, Paarungen und Platten (Tische) automatisch zuweisen, Ergebnisse eintragen, Tabelle live aktualisieren, Playoffs spielen.
+- **Ligen:** Trainingsabende in eine oder mehrere Gesamttabellen übertragen.
+- **Statistiken:** Rangliste, Formkurve, Direktvergleiche u. a. (nur abgeschlossene Abende).
+- **Historie:** abgeschlossene Abende ansehen, bearbeiten, als PDF/Excel exportieren oder drucken.
+- **Speichern:** Automatisches Speichern mit Statusanzeige; bei Verbindungsproblemen bleibt eine lokale Sicherung im Browser erhalten.
+
+## Technik
+
+Vite, React 18, TypeScript, Tailwind CSS 3, shadcn/ui (Radix), react-router, Supabase (Datenbank und Login), jsPDF und write-excel-file für die Exporte, Vitest für Tests. Schriften werden selbst ausgeliefert (`@fontsource`), es gibt keine Verbindung zu Google-Servern.
+
+## Entwicklung
+
+Voraussetzung: Node.js 24 und npm.
+
+```sh
+npm install --legacy-peer-deps   # --legacy-peer-deps wegen eines npm-Peer-Konflikts
+npm run dev        # Entwicklungsserver
+npm run build      # Produktions-Build nach dist/
+npm run preview    # Build lokal ansehen
+npm run lint       # ESLint
+npx vitest run     # Tests
+```
+
+## Betrieb
+
+- **Hosting:** Vercel. Jeder Push auf `main` wird automatisch produktiv ausgeliefert, jeder Pull Request bekommt eine Vorschau-URL.
+- **Datenbank:** Supabase-Projekt `swuwjjmspplzfguapvty`. Das Schema liegt als Migrationen in `supabase/migrations/`.
+- **Backup:** Die Free-Variante von Supabase legt keine automatischen Backups an. Daten regelmäßig sichern (z. B. per geplantem Export in ein privates GitHub-Repository).
+
+## Zugriff und Sicherheit
+
+- Alle Tabellen haben Row Level Security: **Lesen** darf jeder, **Schreiben** nur der angemeldete Admin. Der Anon-Key im Code ist öffentlich vorgesehen und gibt nur Leserechte.
+- Registrierung ist in Supabase abgeschaltet; es gibt genau einen Admin-Account.
+- `vercel.json` setzt Sicherheits-Header (Content-Security-Policy, `X-Frame-Options`, `nosniff`, Referrer- und Permissions-Policy). Neue externe Dienste (Schriften, Skripte, APIs) müssen dort in der CSP freigegeben werden, sonst blockiert der Browser sie.
+- Die Seite ist für Suchmaschinen gesperrt (`robots.txt`, `noindex`, `X-Robots-Tag`). Die Linkvorschau (`public/images/tkc71-vorschau.png`) wirbt nur für den Verein.
+
+## Ursprüngliche Anforderungen
+
 1. Kernfunktionen & Anforderungen:
 
 1.1. Trainingsabend-Management:
@@ -58,7 +102,7 @@
         Option: Aufrufbar aus der Ansicht einer spezifischen Gesamttabelle.
         Formate: Export als XLSX und PDF, inklusive der Gesamttabelle.
 
-3. UI/UX-Richtlinien für Lovable.ai:
+3. UI/UX-Richtlinien:
 
     Intuitiv & Benutzerfreundlich: Einfache Navigation, klare Beschriftungen, minimale Klickpfade.
     Responsives Design: Optimiert für mobile Endgeräte (Smartphones, Tablets).
@@ -66,32 +110,9 @@
     Feedback: Visuelles Feedback bei Aktionen (z.B. "Ergebnisse gespeichert", "Export erfolgreich").
     Eingabefelder: Leicht bedienbare Eingabefelder für Spielergebnisse (z.B. Zahleneingabe über Zifferntastatur).
 
-Zusätzliche Hinweise für die KI:
+Zusätzliche Hinweise:
 
     Datenbankstruktur: Die App muss eine robuste Datenbankstruktur implementieren, die Spieler, Trainingsabende (mit Spielen und Ergebnissen) und Gesamttabellen (mit aggregierten Daten) effizient speichert und verknüpft.
-    User Management: Es ist kein Login- oder User-Management erforderlich. Die App ist für einen Einzelnutzer konzipiert, der die Daten lokal verwaltet.
+    User Management: Ursprünglich war kein Login vorgesehen. Heute gilt: Lesen ist für alle möglich, Ändern nur für den angemeldeten Admin (siehe „Zugriff und Sicherheit“).
     Priorität: Die Kernfunktionen (Paarungsgenerierung, dynamische Tabellen, Ergebnisübertragung) haben höchste Priorität.
     Keine In-App-Käufe oder Werbung: Die App soll werbefrei sein und keine In-App-Käufe enthalten.
-
-This project was built with [Lovable](https://lovable.dev).
-
-**Live app**: https://match-maker-league-flow.lovable.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/89a11b80-430b-40cc-bbf6-34dff727fb48).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
-```

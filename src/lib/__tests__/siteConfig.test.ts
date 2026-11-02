@@ -131,3 +131,46 @@ describe('public folder', () => {
     expect(files.filter(f => f.toLowerCase().endsWith('.pdf'))).toEqual([]);
   });
 });
+
+describe('security headers and zoom', () => {
+  const config = JSON.parse(read('vercel.json'));
+  const headers: Record<string, string> = Object.fromEntries(
+    config.headers.find((h: { source: string }) => h.source === '/(.*)').headers.map((h: { key: string; value: string }) => [h.key, h.value]),
+  );
+  const csp = Object.fromEntries(
+    headers['Content-Security-Policy'].split(';').map(d => d.trim().split(/\s+/)).map(([name, ...values]) => [name, values]),
+  ) as Record<string, string[]>;
+
+  it('sets the standard protective headers', () => {
+    expect(headers['X-Content-Type-Options']).toBe('nosniff');
+    expect(headers['X-Frame-Options']).toBe('DENY');
+    expect(headers['Referrer-Policy']).toBe('strict-origin-when-cross-origin');
+    expect(headers['Permissions-Policy']).toMatch(/camera=\(\)/);
+    expect(headers['X-Robots-Tag']).toContain('noindex');
+  });
+
+  it('CSP allows scripts only from the own origin and forbids framing', () => {
+    expect(csp['script-src']).toEqual(["'self'"]);
+    expect(headers['Content-Security-Policy']).not.toMatch(/unsafe-eval/);
+    expect(csp['frame-ancestors']).toEqual(["'none'"]);
+    expect(csp['default-src']).toEqual(["'self'"]);
+  });
+
+  it('CSP lets the app talk to its own Supabase project and to no other host', () => {
+    const client = read('src/integrations/supabase/client.ts');
+    const url = client.match(/https:\/\/[a-z0-9]+\.supabase\.co/)![0];
+    expect(csp['connect-src']).toEqual(["'self'", url]);
+    const hosts = [...headers['Content-Security-Policy'].matchAll(/https?:\/\/[^\s;]+/g)].map(m => m[0]);
+    expect(hosts).toEqual([url]);
+  });
+
+  it('keeps the SPA rewrite', () => {
+    expect(config.rewrites).toContainEqual({ source: '/(.*)', destination: '/index.html' });
+  });
+
+  it('viewport allows zooming', () => {
+    const viewport = html.match(/<meta\s+name="viewport"\s+content="([^"]*)"/)![1];
+    expect(viewport).not.toMatch(/user-scalable\s*=\s*(no|0)/);
+    expect(viewport).not.toMatch(/maximum-scale/);
+  });
+});
