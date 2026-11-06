@@ -46,7 +46,7 @@ const Training = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
-  const { status: saveStatus, retry: retrySave, markSaved, announceOnSave, cancelPending } =
+  const { status: saveStatus, retry: retrySave, markSaved, announceOnSave, cancelPending, closeSession, reopenSession } =
     useSessionAutosave(session, isAdmin);
 
   const loadData = useCallback(async () => {
@@ -292,12 +292,13 @@ const Training = () => {
       transferredToLeagues: [...new Set([...alreadyDone, ...leagueIds])],
     };
 
-    // Complete the evening. Pending autosaves are dropped first so an older state cannot overwrite it.
-    cancelPending();
+    // Complete the evening. Autosaving of this evening stops first so an older state cannot overwrite it.
+    closeSession(currentSession.id);
     try {
       await saveToHistory(completedSession);
       await saveCurrentSession(null);
     } catch (err) {
+      reopenSession();
       console.error('Failed to complete the evening:', err);
       toast.error(
         'Die Ligen sind aktualisiert, aber der Abend konnte nicht abgeschlossen werden. Bitte "Training abschließen" erneut wählen – die Ligen werden nicht doppelt gezählt.'

@@ -68,6 +68,8 @@ export function useSessionAutosave(session: TrainingSession | null, enabled: boo
   const queueRef = useRef<SaveQueue<TrainingSession> | null>(null);
   const baselineRef = useRef<TrainingSession | null>(null);
   const announceRef = useRef<string | null>(null);
+  // Evening that is being completed: its state must not be autosaved any more (see closeSession)
+  const closedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const queue = createSaveQueue<TrainingSession>({
@@ -94,6 +96,7 @@ export function useSessionAutosave(session: TrainingSession | null, enabled: boo
 
   useEffect(() => {
     if (!enabled || !session || session === baselineRef.current) return;
+    if (session.id === closedIdRef.current) return;
     writeBackup(session);
     queueRef.current?.push(session);
   }, [session, enabled]);
@@ -124,7 +127,22 @@ export function useSessionAutosave(session: TrainingSession | null, enabled: boo
     queueRef.current?.cancelPending();
   }, []);
 
+  /**
+   * Call right before the evening is completed. Drops waiting changes AND stops autosaving this evening.
+   * Without the second part, the render that follows the last state change pushes an older state
+   * (not completed) behind the completion write, and that overwrites it: the evening then never shows in the history.
+   */
+  const closeSession = useCallback((id: string) => {
+    closedIdRef.current = id;
+    queueRef.current?.cancelPending();
+  }, []);
+
+  /** Autosaving continues (completing the evening failed, the evening is still being edited). */
+  const reopenSession = useCallback(() => {
+    closedIdRef.current = null;
+  }, []);
+
   const retry = useCallback(() => queueRef.current?.retryNow(), []);
 
-  return { status, retry, markSaved, announceOnSave, cancelPending };
+  return { status, retry, markSaved, announceOnSave, cancelPending, closeSession, reopenSession };
 }
