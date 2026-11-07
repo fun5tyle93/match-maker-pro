@@ -40,13 +40,15 @@ interface Drawn {
 }
 
 // jsPDF creates its drawing methods per document, so every new document is wrapped here to record the texts
-const recorder = vi.hoisted(() => ({ drawn: [] as Drawn[] }));
+const recorder = vi.hoisted(() => ({ drawn: [] as Drawn[], headers: [] as { title: string; subtitle?: string }[] }));
 
 vi.mock('@/lib/pdfStyles', async importOriginal => {
   const actual = await importOriginal<typeof import('@/lib/pdfStyles')>();
   return {
     ...actual,
     createStyledPDF: (...args: Parameters<typeof actual.createStyledPDF>) => {
+      // The header texts are drawn inside createStyledPDF, before the document can be wrapped: record what it was given
+      recorder.headers.push({ title: args[0], subtitle: args[1] });
       const result = actual.createStyledPDF(...args);
       const doc = result.doc;
       const original = doc.text.bind(doc);
@@ -71,6 +73,7 @@ vi.mock('@/lib/pdfStyles', async importOriginal => {
 /** The texts drawn since the last call. */
 function recordText(): Drawn[] {
   recorder.drawn.length = 0;
+  recorder.headers.length = 0;
   return recorder.drawn;
 }
 
@@ -172,6 +175,22 @@ describe('training PDF layout', () => {
     expect(drawn.some(d => d.text.includes(' von 15'))).toBe(true);
   });
 
+  it('has no date at the top right of the header (the title and footer carry it)', () => {
+    const session = { ...makeSession(6), name: '1146. Meisterschaft vom 23.10.2026' };
+    const drawn = recordText();
+    buildTrainingPdf(session);
+    expect(recorder.headers).toEqual([{ title: '1146. Meisterschaft vom 23.10.2026', subtitle: undefined }]);
+    expect(drawn.some(d => d.text === '23.10.2026')).toBe(false);
+    expect(drawn.some(d => d.text.startsWith('Erstellt am '))).toBe(true);
+  });
+
+  it('an evening without a name still carries its date in the title', () => {
+    recordText();
+    buildTrainingPdf(makeSession(6));
+    expect(recorder.headers[0].title).toBe('Trainingsabend 23.10.2026');
+    expect(recorder.headers[0].subtitle).toBeUndefined();
+  });
+
   it('names the player who sits out in every round (odd number of players)', () => {
     const session = makeSession(5);
     const drawn = recordText();
@@ -198,6 +217,21 @@ describe('training PDF layout', () => {
     expect(drawn.some(d => d.text === 'P1')).toBe(true);
     expect(drawn.some(d => d.text === 'Spiele (P = Platte)')).toBe(true);
     expect(drawn.some(d => /^T\d+$/.test(d.text))).toBe(false);
+  });
+});
+
+describe('league PDF header date', () => {
+  it('shows "Stand: <today>" (not the creation date of the league)', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-09T10:00:00Z'));
+    try {
+      const drawn = recordText();
+      buildLeaguePdf({ id: 'l', name: 'Tabelle 2026', year: 2026, playerStats: [], createdAt: '2026-01-16T00:00:00Z' });
+      expect(recorder.headers).toEqual([{ title: 'Tabelle 2026', subtitle: 'Stand: 9.11.2026' }]);
+      expect(drawn.some(d => d.text.includes('16.1.2026'))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
