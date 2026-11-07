@@ -203,7 +203,7 @@ export function buildTrainingPdf(session: TrainingSession, logoBase64?: string):
   const matchesByRound = groupMatchesByRound(groupMatches);
   const summary = summarizeMatches(groupMatches);
 
-  const { doc, startY } = createStyledPDF(sessionTitle(session), formatDateDE(session.date), logoBase64);
+  const { doc, startY } = createStyledPDF(sessionTitle(session), undefined, logoBase64);
   const { margin, pageWidth, pageHeight } = PDF_CONFIG;
   let currentY = startY;
 
@@ -378,7 +378,7 @@ export async function exportTrainingToPDF(
 export function buildLeaguePdf(league: League, logoBase64?: string): jsPDF {
   const { doc, startY } = createStyledPDF(
     league.name,
-    `Erstellt: ${formatDateDE(league.createdAt)}`,
+    `Stand: ${formatDateDE(new Date())}`,
     logoBase64,
   );
   const { margin } = PDF_CONFIG;
