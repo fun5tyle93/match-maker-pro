@@ -1,8 +1,8 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { League, Match, TrainingSession } from '@/types';
+import { League, Match, Player, TrainingSession } from '@/types';
 import { calculatePlayerStats } from './pairingGenerator';
-import { groupMatchesByRound } from './tables';
+import { groupMatchesByRound, pausingPlayers } from './tables';
 import { getSwissMatches, toPlayoffMatches, playoffMatchWinner } from './tournamentPhases';
 import { getRoundName } from './swissPairing';
 import {
@@ -116,11 +116,20 @@ function roundLayout(roundCount: number): RoundLayout {
   };
 }
 
-const blockHeight = (layout: RoundLayout, matchCount: number) =>
-  layout.headerHeight + matchCount * layout.matchHeight + 2 * layout.scale;
+// A round with a player who sits out gets one more line ("Pause: ...")
+const blockHeight = (layout: RoundLayout, matchCount: number, hasPause = false) =>
+  layout.headerHeight + (matchCount + (hasPause ? 1 : 0)) * layout.matchHeight + 2 * layout.scale;
 
 /** Draws one round: header, then one line per match (platte, home, score, away). */
-function drawRoundBlock(doc: jsPDF, layout: RoundLayout, round: number, matches: Match[], x: number, y: number): void {
+function drawRoundBlock(
+  doc: jsPDF,
+  layout: RoundLayout,
+  round: number,
+  matches: Match[],
+  x: number,
+  y: number,
+  pausing: Player[] = [],
+): void {
   const { fontSize, colWidth, headerHeight, matchHeight, scale } = layout;
 
   doc.setFillColor(...PDF_COLORS.primary);
@@ -169,6 +178,15 @@ function drawRoundBlock(doc: jsPDF, layout: RoundLayout, round: number, matches:
 
     lineY += matchHeight;
   });
+
+  if (pausing.length > 0) {
+    const textY = lineY + matchHeight * 0.65;
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(...PDF_COLORS.textMuted);
+    const pause = fitText(doc, `Pause: ${pausing.map(p => p.name).join(', ')}`, colWidth - 4, fontSize);
+    doc.setFontSize(pause.fontSize);
+    doc.text(pause.text, x + 2, textY);
+  }
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...PDF_COLORS.text);
@@ -266,10 +284,10 @@ export function buildTrainingPdf(session: TrainingSession, logoBase64?: string):
   const bottomLimit = pageHeight - PDF_CONFIG.footerHeight - 2;
   const spiele = hasPlayoff ? 'Vorrunde – Spiele (P = Platte)' : 'Spiele (P = Platte)';
 
-  const firstRowHeight = Math.max(
-    ...roundKeys.slice(0, 2).map(r => blockHeight(layout, matchesByRound[r].length)),
-    0,
-  );
+  const pauseOf = (round: number) => pausingPlayers(session.players, matchesByRound[round]);
+  const heightOf = (round: number) => blockHeight(layout, matchesByRound[round].length, pauseOf(round).length > 0);
+
+  const firstRowHeight = Math.max(...roundKeys.slice(0, 2).map(heightOf), 0);
   // Keep the heading together with at least the first row of rounds
   if (roundKeys.length > 0 && currentY + 10 + firstRowHeight > bottomLimit) {
     doc.addPage();
@@ -279,7 +297,7 @@ export function buildTrainingPdf(session: TrainingSession, logoBase64?: string):
 
   for (let i = 0; i < roundKeys.length; i += 2) {
     const pair = roundKeys.slice(i, i + 2);
-    const rowHeight = Math.max(...pair.map(r => blockHeight(layout, matchesByRound[r].length)));
+    const rowHeight = Math.max(...pair.map(heightOf));
 
     if (currentY + rowHeight > bottomLimit) {
       doc.addPage();
@@ -288,7 +306,7 @@ export function buildTrainingPdf(session: TrainingSession, logoBase64?: string):
 
     pair.forEach((round, col) => {
       const x = margin + col * (layout.colWidth + layout.colGap);
-      drawRoundBlock(doc, layout, round, matchesByRound[round], x, currentY);
+      drawRoundBlock(doc, layout, round, matchesByRound[round], x, currentY, pauseOf(round));
     });
     currentY += rowHeight;
   }

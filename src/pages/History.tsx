@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { StandingsTable } from '@/components/StandingsTable';
 import { MatchCard } from '@/components/MatchCard';
+import { PauseNotice } from '@/components/PauseNotice';
 import { PlayoffBracket } from '@/components/PlayoffBracket';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +36,7 @@ import { TrainingSession, Match } from '@/types';
 import { loadHistory, deleteFromHistory, saveToHistory } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
-import { groupMatchesByRound } from '@/lib/tables';
+import { groupMatchesByRound, pausingPlayers } from '@/lib/tables';
 import { pluralize } from '@/lib/plural';
 import { getSwissMatches, toPlayoffMatches, getPlayoffFinalists } from '@/lib/tournamentPhases';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
@@ -388,6 +389,7 @@ const History = () => {
                                 tableNumber={match.tableNumber}
                               />
                             ))}
+                            <PauseNotice players={pausingPlayers(selectedSession.players, matches)} />
                           </div>
                         ))}
                       </div>

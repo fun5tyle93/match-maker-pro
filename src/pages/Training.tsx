@@ -21,7 +21,8 @@ import {
 import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { generatePairings, calculatePlayerStats } from '@/lib/pairingGenerator';
-import { groupMatchesByRound } from '@/lib/tables';
+import { groupMatchesByRound, pausingPlayers } from '@/lib/tables';
+import { PauseNotice } from '@/components/PauseNotice';
 import { pluralize } from '@/lib/plural';
 import { useSessionAutosave, findRestorableBackup, clearBackup } from '@/hooks/useSessionAutosave';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
@@ -394,7 +395,7 @@ const Training = () => {
       <Header />
       
       <main className="container mx-auto px-4 py-6 md:py-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <h1 className="font-display text-2xl md:text-3xl">
             {session ? 'Trainingsabend' : 'Neues Training'}
           </h1>
@@ -494,6 +495,7 @@ const Training = () => {
                 const roundNum = parseInt(round);
                 const isExpanded = expandedRounds.includes(roundNum);
                 const roundComplete = matches.every(m => m.isCompleted);
+                const pausing = pausingPlayers(session.players, matches);
 
                 return (
                   <Card key={round} className="animate-fade-in">
@@ -514,6 +516,11 @@ const Training = () => {
                         <span className="text-muted-foreground text-sm">
                           ({matches.filter(m => m.isCompleted).length}/{matches.length})
                         </span>
+                        {pausing.length > 0 && (
+                          <span className="hidden sm:inline text-muted-foreground text-sm">
+                            · Pause: {pausing.map(p => p.name).join(', ')}
+                          </span>
+                        )}
                       </div>
                       {isExpanded ? (
                         <ChevronUp className="w-5 h-5 text-muted-foreground" />
@@ -523,7 +530,7 @@ const Training = () => {
                     </button>
                     
                     {isExpanded && (
-                      <CardContent className="pt-0 space-y-3">
+                      <CardContent className="pt-0 space-y-3 px-3 sm:px-6">
                         {matches.map((match, index) => (
                           <MatchCard
                             key={match.id}
@@ -532,6 +539,7 @@ const Training = () => {
                             tableNumber={match.tableNumber ?? index + 1}
                           />
                         ))}
+                        <PauseNotice players={pausing} />
                       </CardContent>
                     )}
                   </Card>

@@ -1,7 +1,7 @@
 import type { CellObject, SheetData } from 'write-excel-file/browser';
 import { League, Match, TrainingSession } from '@/types';
 import { calculatePlayerStats } from './pairingGenerator';
-import { sortMatches } from './tables';
+import { groupMatchesByRound, pausingPlayers } from './tables';
 import { getSwissMatches, toPlayoffMatches, playoffMatchWinner } from './tournamentPhases';
 import { getRoundName } from './swissPairing';
 import { leagueFileName, trainingFileName } from './exportShared';
@@ -106,7 +106,7 @@ function winnerSide(m: Pick<Match, 'isCompleted' | 'homeScore' | 'awayScore'>): 
 
 /** Sheets of a training evening: standings, matches and (if played) the playoff. */
 export function buildTrainingSheets(session: TrainingSession): XlsxSheet[] {
-  const groupMatches = sortMatches(getSwissMatches(session.matches));
+  const groupMatches = getSwissMatches(session.matches);
   const playoffMatches = toPlayoffMatches(session.matches);
   const hasPlayoff = playoffMatches.length > 0;
   const stats = calculatePlayerStats(session.players, groupMatches);
@@ -127,20 +127,33 @@ export function buildTrainingSheets(session: TrainingSession): XlsxSheet[] {
     }),
   ];
 
-  // ---- Matches (rounds alternate in shade) ----
+  // ---- Matches (rounds alternate in shade; a round with a player who sits out ends with a "Pause" row) ----
   const matchRows: SheetData = [
     ['Runde', 'Platte', 'Heim', 'Ergebnis', 'Gast'].map(header),
-    ...groupMatches.map(m => {
-      const zebra = m.round % 2 === 0;
-      const winner = winnerSide(m);
-      const table = m.tableNumber ?? groupMatches.filter(other => other.round === m.round).indexOf(m) + 1;
-      return [
-        number(m.round, { zebra }),
-        number(table, { zebra }),
-        text(m.homePlayer.name, { zebra, bold: winner === 'home' }),
-        text(resultText(m), { zebra, align: 'center', bold: true }),
-        text(m.awayPlayer.name, { zebra, bold: winner === 'away' }),
-      ];
+    ...Object.entries(groupMatchesByRound(groupMatches)).flatMap(([roundKey, roundMatches]) => {
+      const round = Number(roundKey);
+      const zebra = round % 2 === 0;
+      const rows: SheetData = roundMatches.map((m, index) => {
+        const winner = winnerSide(m);
+        return [
+          number(m.round, { zebra }),
+          number(m.tableNumber ?? index + 1, { zebra }),
+          text(m.homePlayer.name, { zebra, bold: winner === 'home' }),
+          text(resultText(m), { zebra, align: 'center', bold: true }),
+          text(m.awayPlayer.name, { zebra, bold: winner === 'away' }),
+        ];
+      });
+      const pausing = pausingPlayers(session.players, roundMatches);
+      if (pausing.length > 0) {
+        rows.push([
+          number(round, { zebra }),
+          text('', { zebra }),
+          text(`Pause: ${pausing.map(p => p.name).join(', ')}`, { zebra, color: COLOR.silver }),
+          text('', { zebra }),
+          text('', { zebra }),
+        ]);
+      }
+      return rows;
     }),
   ];
 
