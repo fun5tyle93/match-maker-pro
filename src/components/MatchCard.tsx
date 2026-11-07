@@ -63,7 +63,7 @@ export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber 
   return (
     <div
       className={cn(
-        "bg-card rounded-lg border border-border p-4 transition-all duration-300",
+        "bg-card rounded-lg border border-border p-3 sm:p-4 transition-all duration-300",
         match.isCompleted && !isEditing ? "opacity-80" : "hover:border-primary/50 hover:shadow-glow",
         getResultColor()
       )}
@@ -75,11 +75,11 @@ export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber 
           </span>
         </div>
       )}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
         {/* Home Player */}
-        <div className="flex-1 text-center">
+        <div className="flex-1 min-w-0 text-center">
           <p className={cn(
-            "font-semibold text-sm sm:text-base truncate",
+            "font-semibold text-xs min-[380px]:text-sm sm:text-base leading-tight [overflow-wrap:break-word]",
             match.isCompleted && match.homeScore !== null && match.awayScore !== null &&
             match.homeScore > match.awayScore && "text-primary"
           )}>
@@ -89,14 +89,14 @@ export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber 
         </div>
 
         {/* Score Display/Input */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {readonly ? (
             <>
-              <span className="w-14 h-12 flex items-center justify-center text-xl font-bold">
+              <span className="w-10 sm:w-14 shrink-0 h-12 flex items-center justify-center text-xl font-bold">
                 {match.homeScore ?? '-'}
               </span>
-              <Swords className="w-5 h-5 text-muted-foreground" />
-              <span className="w-14 h-12 flex items-center justify-center text-xl font-bold">
+              <Swords className="hidden sm:block w-5 h-5 text-muted-foreground" />
+              <span className="w-10 sm:w-14 shrink-0 h-12 flex items-center justify-center text-xl font-bold">
                 {match.awayScore ?? '-'}
               </span>
             </>
@@ -109,10 +109,10 @@ export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber 
                 value={homeScore}
                 onChange={(e) => setHomeScore(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="w-14 h-12 text-center text-xl font-bold"
+                className="w-10 sm:w-14 shrink-0 h-12 px-1 sm:px-3 text-center text-xl font-bold max-sm:[-moz-appearance:textfield] max-sm:[&::-webkit-inner-spin-button]:appearance-none max-sm:[&::-webkit-outer-spin-button]:appearance-none"
                 disabled={!showInputs}
               />
-              <Swords className="w-5 h-5 text-muted-foreground" />
+              <Swords className="hidden sm:block w-5 h-5 text-muted-foreground" />
               <Input
                 type="number"
                 min="0"
@@ -120,7 +120,7 @@ export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber 
                 value={awayScore}
                 onChange={(e) => setAwayScore(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="w-14 h-12 text-center text-xl font-bold"
+                className="w-10 sm:w-14 shrink-0 h-12 px-1 sm:px-3 text-center text-xl font-bold max-sm:[-moz-appearance:textfield] max-sm:[&::-webkit-inner-spin-button]:appearance-none max-sm:[&::-webkit-outer-spin-button]:appearance-none"
                 disabled={!showInputs}
               />
             </>
@@ -128,9 +128,9 @@ export function MatchCard({ match, onUpdateScore, readonly = false, tableNumber 
         </div>
 
         {/* Away Player */}
-        <div className="flex-1 text-center">
+        <div className="flex-1 min-w-0 text-center">
           <p className={cn(
-            "font-semibold text-sm sm:text-base truncate",
+            "font-semibold text-xs min-[380px]:text-sm sm:text-base leading-tight [overflow-wrap:break-word]",
             match.isCompleted && match.homeScore !== null && match.awayScore !== null &&
             match.awayScore > match.homeScore && "text-primary"
           )}>

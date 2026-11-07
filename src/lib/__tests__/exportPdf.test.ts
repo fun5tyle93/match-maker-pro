@@ -121,7 +121,7 @@ describe('fitText', () => {
 });
 
 describe('training PDF layout', () => {
-  it.each([4, 6, 10, 14])('no two texts on the same line overlap (%i players, long names)', players => {
+  it.each([4, 5, 6, 9, 10, 13, 14])('no two texts on the same line overlap (%i players, long names)', players => {
     const drawn = recordText();
     buildTrainingPdf(makeSession(players));
 
@@ -170,6 +170,26 @@ describe('training PDF layout', () => {
     buildTrainingPdf(makeSession(6, 1, false));
     expect(drawn.some(d => d.text === 'TABELLENFÜHRER')).toBe(true);
     expect(drawn.some(d => d.text.includes(' von 15'))).toBe(true);
+  });
+
+  it('names the player who sits out in every round (odd number of players)', () => {
+    const session = makeSession(5);
+    const drawn = recordText();
+    buildTrainingPdf(session);
+    const pauseTexts = drawn.map(d => d.text).filter(t => t.startsWith('Pause:'));
+    expect(pauseTexts).toHaveLength(5);
+    // Oracle: for each round the player who does not appear in any match of that round
+    const expected = [...new Set(session.matches.map(m => m.round))].map(round => {
+      const playing = new Set(session.matches.filter(m => m.round === round).flatMap(m => [m.homePlayer.id, m.awayPlayer.id]));
+      return `Pause: ${session.players.find(p => !playing.has(p.id))!.name}`;
+    });
+    expect([...pauseTexts].sort()).toEqual([...expected].sort());
+  });
+
+  it('prints no pause line when everybody plays (even number of players)', () => {
+    const drawn = recordText();
+    buildTrainingPdf(makeSession(6));
+    expect(drawn.some(d => d.text.startsWith('Pause'))).toBe(false);
   });
 
   it('labels platten with "P" and explains it', () => {

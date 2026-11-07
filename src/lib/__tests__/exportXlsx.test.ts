@@ -33,6 +33,39 @@ const league: League = {
 
 const cellValue = (cell: unknown) => (cell && typeof cell === 'object' ? (cell as { value: unknown }).value : cell);
 
+describe('pause rows (odd number of players)', () => {
+  const odd = ['Anna Aal', 'Bernd Bär', 'Clara Cäsar', 'Dirk Dachs', 'Eva Ente'].map((name, i) => ({ id: `p${i}`, name }));
+  const { matches, roundCount } = generatePairings(odd, 1);
+  const oddSession: TrainingSession = {
+    id: 's', date: '2026-10-23T18:00:00Z', players: odd, roundCount, matchesPerPairing: 1, isCompleted: true,
+    matches: matches.map((m, i) => ({ ...m, isCompleted: true, homeScore: i % 4, awayScore: (i + 1) % 3 })),
+  };
+  const rows = buildTrainingSheets(oddSession)[1].data.slice(1);
+
+  it('adds one pause row per round, after the matches of that round, naming the player who is not playing', () => {
+    const pauseRows = rows.filter(r => String(cellValue(r[2])).startsWith('Pause:'));
+    expect(pauseRows).toHaveLength(roundCount);
+    for (let round = 1; round <= roundCount; round++) {
+      const ofRound = rows.filter(r => cellValue(r[0]) === round);
+      const last = ofRound[ofRound.length - 1];
+      expect(String(cellValue(last[2])).startsWith('Pause:'), `round ${round} ends with the pause row`).toBe(true);
+      const playing = new Set(ofRound.slice(0, -1).flatMap(r => [cellValue(r[2]), cellValue(r[4])]));
+      const missing = odd.filter(p => !playing.has(p.name)).map(p => p.name);
+      expect(missing).toHaveLength(1);
+      expect(cellValue(last[2])).toBe(`Pause: ${missing[0]}`);
+    }
+  });
+
+  it('keeps every row at the width of the header', () => {
+    rows.forEach(r => expect(r).toHaveLength(5));
+  });
+
+  it('has no pause row when everybody plays', () => {
+    const even = buildTrainingSheets(session())[1].data.slice(1);
+    expect(even.some(r => String(cellValue(r[2])).startsWith('Pause'))).toBe(false);
+  });
+});
+
 describe('training sheets', () => {
   const sheets = buildTrainingSheets(session());
 
