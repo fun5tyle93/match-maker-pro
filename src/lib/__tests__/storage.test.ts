@@ -143,6 +143,16 @@ describe('saving an evening', () => {
     expect(state.db.training_players.find(r => r.player_id === 'p1')?.id).toBe('tp1');
   });
 
+  it('never creates a second row for the same player, however often the evening is saved', async () => {
+    // The database has UNIQUE (session_id, player_id) (migration 20261113110000), so a duplicate insert would fail
+    await saveToHistory(session());
+    await saveToHistory(session());
+    await saveToHistory(session({ players: [p('p1'), p('p2'), p('p4')] }));
+
+    const keys = state.db.training_players.map(r => `${r.session_id}|${r.player_id}`);
+    expect(keys.sort()).toEqual(['s1|p1', 's1|p2', 's1|p4']);
+  });
+
   it('removes old rows only after the new rows were written', async () => {
     await saveToHistory(session());
     const lastWrite = state.ops.lastIndexOf('upsert:matches');
