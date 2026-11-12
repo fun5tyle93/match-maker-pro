@@ -34,7 +34,7 @@ run_sql() { as_pg "$PSQL -f '$1'"; }
 # Supabase-Umgebung nachbilden
 SHIM="$DIR/shim.sql"
 cat > "$SHIM" <<'SQL'
-CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;
+CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;
 CREATE SCHEMA auth;
 CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT coalesce(current_setting('request.jwt.claim.role', true), 'anon') $$;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;

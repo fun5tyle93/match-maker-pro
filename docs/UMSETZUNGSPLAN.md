@@ -603,7 +603,7 @@ Sie ist additiv. Die bestehenden Policies gelten auch für die neue Spalte. Zuer
 
 > **Stand nach Rücksprache am 12.11.2026:** Der Nutzer klammert die Namensfrage für die **Jahrestabellen** aus. Dort sieht er in der Oberfläche keine doppelten Namen. Die **Ewige Tabelle** prüft er mit dir in einem eigenen nächsten Schritt: mögliche Duplikate „Klaudio Lange“ und „Benjamin Buza“. Schritt D und E werden erst nach dieser Prüfung und nach ausdrücklicher Freigabe begonnen. Bis dahin ist der folgende Text nur die Vorlage.
 
-**Branch:** `feat/player-identity`. Groß, deshalb in Teilschritten mit je eigenem PR, wenn sinnvoll.
+**Branch:** `feat/player-identity-schema` (D1), danach je ein eigener PR für D2 (Daten füllen) und D3 (App). Stand 13.11.2026: D1 begonnen, Vorgehen vom Nutzer bestätigt.
 
 ### 9.1 Problem
 
@@ -651,7 +651,7 @@ Die Namensspalten (`player_name`, `home_player_name` …) bleiben und werden wei
 
 1. Erzeuge per `SELECT` eine Liste aller verschiedenen Namen aus `training_players`, `matches` und `player_stats`, mit Häufigkeit und Liga. Laut Backup sind es 34 Namen in Abenden und 210 in Ligen.
 2. Schlage Gruppen vor: gleicher Name ohne Groß-/Kleinschreibung und Leerzeichen, Vorname gleich, Ähnlichkeit über `calculateSimilarity` aus `pairingGenerator.ts`. **Nur Vorschläge.**
-3. Leg dem Nutzer eine Tabelle vor (gerne als Datei `docs/spieler-zuordnung.csv` im PR): `name | vorschlag_spieler | belege`. Der Nutzer bestätigt oder korrigiert. Ohne Bestätigung keine Zuordnung.
+3. Leg dem Nutzer eine Tabelle vor. **Das App-Repository ist öffentlich, deshalb liegt die Liste nicht hier, sondern im privaten Backup-Repository** (`fun5tyle93/backup-TKMatchmaker`, Ordner `zuordnung/`: `ENTSCHEIDUNGEN.md` und `spieler-zuordnung-vorschlag.csv`). Der Nutzer bestätigt oder korrigiert. Ohne Bestätigung keine Zuordnung. Stand 13.11.2026: bestätigt und dort festgehalten, offen sind nur Klaudio Lange und Benjamin Buza (händische Prüfung). Die Migration D2 enthält **keine Namen**: Sie bildet die Spieler aus den vorhandenen Namen, die wenigen Ausnahmen werden über die Datenbankabfrage gesetzt.
 4. Erst danach füllt eine Migration `players`, `player_aliases` und die `*_ref`-Spalten. Prüfe nach der Migration:
    - **Abende:** Jede Zeile in `training_players` und jedes Spiel hat eine Referenz (`IS NOT NULL`).
    - **Ligen:** Jede Zeile in `player_stats` hat eine Referenz.

@@ -63,6 +63,8 @@ export type Database = {
       }
       matches: {
         Row: {
+          away_player_ref: string | null
+          home_player_ref: string | null
           away_player_id: string
           away_player_name: string
           away_score: number | null
@@ -81,6 +83,8 @@ export type Database = {
           table_number: number | null
         }
         Insert: {
+          away_player_ref?: string | null
+          home_player_ref?: string | null
           away_player_id: string
           away_player_name: string
           away_score?: number | null
@@ -99,6 +103,8 @@ export type Database = {
           table_number?: number | null
         }
         Update: {
+          away_player_ref?: string | null
+          home_player_ref?: string | null
           away_player_id?: string
           away_player_name?: string
           away_score?: number | null
@@ -124,10 +130,48 @@ export type Database = {
             referencedRelation: "training_sessions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "matches_home_player_ref_fkey"
+            columns: ["home_player_ref"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_away_player_ref_fkey"
+            columns: ["away_player_ref"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_aliases: {
+        Row: {
+          alias: string
+          player_id: string
+        }
+        Insert: {
+          alias: string
+          player_id: string
+        }
+        Update: {
+          alias?: string
+          player_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_aliases_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
         ]
       }
       player_stats: {
         Row: {
+          player_ref: string | null
           championships: number
           draws: number
           goal_difference: number
@@ -144,6 +188,7 @@ export type Database = {
           wins: number
         }
         Insert: {
+          player_ref?: string | null
           championships?: number
           draws?: number
           goal_difference?: number
@@ -160,6 +205,7 @@ export type Database = {
           wins?: number
         }
         Update: {
+          player_ref?: string | null
           championships?: number
           draws?: number
           goal_difference?: number
@@ -183,22 +229,50 @@ export type Database = {
             referencedRelation: "leagues"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "player_stats_player_ref_fkey"
+            columns: ["player_ref"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      players: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+        }
+        Relationships: []
       }
       training_players: {
         Row: {
+          player_ref: string | null
           id: string
           player_id: string
           player_name: string
           session_id: string
         }
         Insert: {
+          player_ref?: string | null
           id?: string
           player_id: string
           player_name: string
           session_id: string
         }
         Update: {
+          player_ref?: string | null
           id?: string
           player_id?: string
           player_name?: string
@@ -210,6 +284,13 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_players_player_ref_fkey"
+            columns: ["player_ref"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
         ]
