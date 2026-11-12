@@ -7,7 +7,9 @@ Dieser Plan ist für die Umsetzung durch Claude (Sonnet) in einer späteren Sitz
 1. **Es dürfen keine Daten verloren gehen.** Kein Abend, kein Ergebnis, kein Ligastand, kein Meistertitel.
 2. **Das Schweizer System muss danach fehlerfrei funktionieren.** In der Vorrunde eines Turniers spielt jedes Paar **höchstens einmal** gegeneinander. Im Playoff darf es wieder zur Begegnung kommen.
 
-Wenn eine Anweisung in diesem Plan mit diesen zwei Zielen kollidiert, gewinnen die Ziele. Halte dann an und frage den Nutzer.
+3. **Die Wertung bei Gleichstand folgt der DTKV-Spielordnung 2026** (Abschnitt 6, Schritt W). Wo die Spielordnung nichts regelt, gelten die dort ergänzten Vereinsregeln.
+
+Wenn eine Anweisung in diesem Plan mit diesen Zielen kollidiert, gewinnen die Ziele. Halte dann an und frage den Nutzer.
 
 ---
 
@@ -18,12 +20,15 @@ Wenn eine Anweisung in diesem Plan mit diesen zwei Zielen kollidiert, gewinnen d
 3. [Projektkontext und Umgebung](#3-projektkontext-und-umgebung)
 4. [Werkzeuge](#4-werkzeuge)
 5. [Schritt A: Sicherheitsnetz und Hygiene](#5-schritt-a-sicherheitsnetz-und-hygiene)
-6. [Schritt B: Schweizer System neu](#6-schritt-b-schweizer-system-neu)
-7. [Schritt C: Doppelte Spielerzeilen bereinigen](#7-schritt-c-doppelte-spielerzeilen-bereinigen)
-8. [Schritt D: Feste Spieler-Identität](#8-schritt-d-feste-spieler-identität)
-9. [Schritt E: Ligen aus den Abenden berechnen, Abschluss in einer Transaktion](#9-schritt-e-ligen-aus-den-abenden-berechnen-abschluss-in-einer-transaktion)
-10. [Offene Entscheidungen des Nutzers](#10-offene-entscheidungen-des-nutzers)
-11. [Anhang: Befunde mit Belegen](#11-anhang-befunde-mit-belegen)
+6. [Schritt W: Wertung nach DTKV-Spielordnung](#6-schritt-w-wertung-nach-dtkv-spielordnung)
+7. [Schritt B: Schweizer System neu](#7-schritt-b-schweizer-system-neu)
+8. [Schritt C: Doppelte Spielerzeilen bereinigen](#8-schritt-c-doppelte-spielerzeilen-bereinigen)
+9. [Schritt D: Feste Spieler-Identität (später)](#9-schritt-d-feste-spieler-identität-später)
+10. [Schritt E: Ligen aus den Abenden berechnen (später)](#10-schritt-e-ligen-aus-den-abenden-berechnen-später)
+11. [Entscheidungen des Nutzers](#11-entscheidungen-des-nutzers)
+12. [Anhang: Befunde mit Belegen](#12-anhang-befunde-mit-belegen)
+
+**Reihenfolge:** A → W → B → C. D und E folgen erst nach Rücksprache mit dem Nutzer, siehe 11.
 
 ---
 
@@ -146,6 +151,10 @@ Das Skript ist nur lesend. Es gibt pro Tabelle die Zeilenzahl aus, pro Liga die 
 
 Das ist eine lauffähige Referenz des Algorithmus aus Schritt B, inklusive Simulation (`node scripts/swiss-pairing-prototype.mjs`). Ergebnis bei 4 bis 20 Spielern, jeweils bis zur maximalen Rundenzahl: **0 Wiederholungen, 0 Fälle, in denen sich nicht auslosen ließ**. Die langsamste Runde brauchte 0,6 s (20 Spieler, 19 Runden), sonst meist unter 10 ms. Übersetze ihn nach TypeScript, statt einen neuen Algorithmus zu erfinden.
 
+### 4.5 Referenz der DTKV-Wertung: `scripts/dtkv-ranking-reference.mjs`
+
+Das ist eine lauffähige Referenz von SO § 8 Abs. 3 mit den 6 Pflichtfällen aus 6.1 (`node scripts/dtkv-ranking-reference.mjs`). Mit einem Backup-Ordner als Argument vergleicht das Skript jeden gespeicherten Abend zwischen alter und neuer Wertung. Übersetze `rankGroup` nach TypeScript und prüfe deine Umsetzung gegen dieses Skript, zum Beispiel mit denselben Fällen und zufälligen Abenden, die beide Implementierungen gleich ordnen müssen.
+
 ---
 
 ## 5. Schritt A: Sicherheitsnetz und Hygiene
@@ -171,11 +180,181 @@ Das ist eine lauffähige Referenz des Algorithmus aus Schritt B, inklusive Simul
 
 ---
 
-## 6. Schritt B: Schweizer System neu
+## 6. Schritt W: Wertung nach DTKV-Spielordnung
 
-**Branch:** `feat/swiss-rewrite`. Enthält eine additive Migration (6.6).
+**Branch:** `feat/dtkv-ranking`. Enthält eine additive Migration (6.8).
 
-### 6.1 Was heute kaputt ist (belegt, siehe Anhang)
+**Quellen:** DTKV-Spielordnung, Stand 24. März 2026 („SO“), und DTKV-Spielregeln 2025. Der Nutzer hat beide Dokumente bereitgestellt. Maßgeblich sind:
+- **SO § 8 Abs. 2:** Punkteverteilung im Turnier. Sieg 2:0, Unentschieden 1:1, Niederlage 0:2. Das entspricht dem heutigen Code.
+- **SO § 8 Abs. 3:** Punktgleichheit innerhalb einer Gruppe.
+- **SO § 8 Abs. 4, § 9 Abs. 1 bis 3:** K.-o.-Spiele, Entscheidungsspiele, Finale.
+- **SO § 2 Abs. 6:** Platzierung in der Einzelwertung einer Liga.
+
+Ein Trainingsabend im Rundenmodus ist eine Gruppe im Sinne von SO § 8. Die Jahrestabelle ist eine Einzelwertung über viele Abende und wird analog zu SO § 2 Abs. 6 behandelt.
+
+### 6.1 Abend im Rundenmodus: SO § 8 Abs. 3 (verbindlich)
+
+Wörtlicher Kern der Regel: „Sind zwei Spieler innerhalb einer Gruppe (Hauptgruppe) punktgleich, wird zuerst der direkte Vergleich herangezogen. Endete dieser unentschieden, zählt zuerst die höhere Tordifferenz und nur bei Gleichheit die Anzahl der mehr geschossenen Tore in der Hauptgruppe. Sind drei oder mehr Spieler punktgleich, bilden diese eine eigene Untergruppe, deren Punkte und Torverhältnisse neu errechnet werden; die Platzierung erfolgt zuerst nach Punkten in der Untergruppe. Sind wiederum Spieler punktgleich, bilden diese eine Unteruntergruppe (zwei Spieler: direkter Vergleich). Ist dann keine eindeutige Platzierung möglich, gilt das Torverhältnis aller Betroffenen in der nächst höheren Gruppe, danach in der Hauptgruppe. Ist auch dann keine eindeutige Platzierung möglich, gibt es ein Entscheidungsspiel (bei mehr als zwei Spielern eine Entscheidungsrunde).“
+
+**Algorithmus** (Referenz: `scripts/dtkv-ranking-reference.mjs`, Funktion `rankGroup`):
+
+```
+rang(Menge M, Vorfahren V):            // V = übergeordnete Gruppen, nächste zuerst, Hauptgruppe zuletzt
+  Punkte nur aus den Spielen innerhalb von M berechnen; nach Punkten absteigend in Blöcke gruppieren
+  für jeden Block B:
+    |B| = 1            → fertig
+    |B| < |M|          → rang(B, [M, ...V])           // Untergruppe; bei zwei Spielern = direkter Vergleich
+    |B| = |M|          → Punkte trennen hier nicht mehr:
+                         sortiere B nach (Tordifferenz, geschossene Tore) in V[0], dann in V[1], … bis zur Hauptgruppe
+                         (hat M keine Vorfahren, ist M die Hauptgruppe: deren eigene Tore)
+                         wer danach noch völlig gleich ist, bleibt ein Gleichstand-Block
+Ergebnis = rang(alle Spieler des Abends, [])
+```
+
+**Auslegungen** (im Code als Kommentar dokumentieren):
+- **„Torverhältnis“:** Darunter wird hier, wie in Satz 2 der Regel, erst die Tordifferenz und dann die Zahl der geschossenen Tore verstanden.
+- **Teilweise Trennung über Tore:** Trennen die Tore in einer übergeordneten Gruppe nur einen Teil der Gleichen, wird für den Rest keine neue Untergruppe gebildet. Es geht in der Kette weiter zur nächsten übergeordneten Gruppe. Die Regel sieht die Neubildung nur nach Punkten vor.
+- **Mehrfache Begegnungen:** Bei Hin- und Rückrunde (`matchesPerPairing` > 1) zählen für den direkten Vergleich alle Spiele der beiden gegeneinander.
+- **Wertung zählt nur die Vorrunde:** Gewertet werden nur abgeschlossene Spiele mit Ergebnis der Gruppe, also nicht Playoff und nicht Entscheidungsspiele.
+
+**Pflicht-Testfälle** (`npm test`; sie stehen auch im Referenzskript, `node scripts/dtkv-ranking-reference.mjs` muss 6× OK ausgeben):
+
+| Fall | Spiele (Heim-Gast Tore) | Erwartet nach DTKV | Alte App |
+|---|---|---|---|
+| 1 Direkter Vergleich schlägt Tordifferenz | A-B 1:0, C-A 1:0, A-D 1:0, B-C 9:0, B-D 9:0, D-C 1:0 | A > B > D > C | B > A > D > C |
+| 2 Direkter Vergleich unentschieden | A-B 2:2, A-C 3:0, B-C 1:0 | A > B > C | gleich |
+| 3 Drei im Kreis | A-B 1:0, B-C 1:0, C-A 1:0, A-D 5:0, B-D 3:0, C-D 1:0 | A > B > C > D | gleich |
+| 4 Zwei punktgleiche Paare | A-B 3:0, A-C 3:0, B-C 0:1, D-A 1:0, B-D 1:0, C-D 1:0 | A > C > B > D | A > C > D > B |
+| 5 Völlige Gleichheit | A-B 2:2 | A = B (Gleichstand) | A > B |
+| 6 Tore der Untergruppe vor Hauptgruppe | A-B 1:0, A-C 5:0, B-C 0:0, D-A 1:0, E-A 1:0, B-D 1:0, B-E 1:1, C-D 9:0, C-E 0:0, D-E 0:0 | E > A > B > C > D | E > C > A > B > D |
+
+Zusätzlich gelten zufallsbasierte Eigenschaftstests: Die Reihenfolge hängt nicht von der Reihenfolge der Spieler- und Spieleliste ab. Mische beide und vergleiche das Ergebnis.
+
+### 6.2 Völliger Gleichstand am Abend (Vereinsregel, ergänzt)
+
+Die SO sieht ein Entscheidungsspiel nur vor, wenn es um die Qualifikation für die nächste Runde geht (§ 8 Abs. 3 Satz 14). Bei eindeutig Ausgeschiedenen verzichtet sie ausdrücklich darauf (Satz 15). Für den **Tagessieg und den Vize** eines Trainingsabends gibt es keine Regel, obwohl beide als Meister- und Vizetitel in die Jahrestabellen eingehen. **Ergänzte Regel:**
+
+- **Platz 1 oder 2 betroffen:** Bleibt nach 6.1 ein Gleichstand, der Platz 1 oder Platz 2 berührt, wird ein Entscheidungsspiel ausgetragen, bei mehr als zwei Spielern eine Entscheidungsrunde. Es gilt der K.-o.-Modus mit Sudden Death (SO § 8 Abs. 4, § 9 Abs. 2).
+  - **Eintragen:** Beim Klick auf „Training abschließen“ erscheint ein Dialog „Gleichstand um Platz X – Entscheidungsspiel“, in dem der Admin den Sieger auswählt. Bei einer Runde gibt er die Reihenfolge an.
+  - **Keine Wertung:** Das Ergebnis zählt **nicht** zu Punkten und Toren des Abends. Es legt nur die Reihenfolge fest.
+  - **Speicherort:** neue Spalte `training_sessions.decider_results`, siehe 6.8.
+- **Hintere Plätze:** Ein Gleichstand dort bleibt stehen. Die Tabelle zeigt dann für alle Beteiligten dieselbe Platzzahl (zum Beispiel zweimal „4.“), mit dem Hinweis „gleichauf“.
+
+Laut Backup gab es bisher an keinem Abend einen solchen völligen Gleichstand. Die Regel betrifft also nur künftige Abende.
+
+### 6.3 Keine stillschweigende Rückwirkung (Datenschutz für vergangene Titel)
+
+Nachrechnung aller 24 abgeschlossenen Abende aus dem Backup vom 06.11.2026 (`node scripts/dtkv-ranking-reference.mjs <backup>/data`):
+- **6 Abende** hätten nach DTKV eine andere Reihenfolge.
+- **Bei 1 Abend** wäre der Sieger ein anderer: Jugend- und Damenmeisterschaft vom 08.05.2026, Timo Schwarz statt Jamil Hecker.
+- **Bei 4 Abenden** wäre der Vize ein anderer.
+
+Die Meister- und Vizetitel dieser Abende sind in den Jahrestabellen aber bereits gezählt. Historie, Statistik und Export rechnen die Rangfolge jedes Mal neu aus. Ohne Vorkehrung würden sie für alte Abende plötzlich andere Sieger zeigen als die Ligen.
+
+Deshalb bekommt jeder Abend die Wertungsregel, nach der er gespielt wurde:
+- **Neue Spalte** `training_sessions.ranking_rule text` (6.8).
+- **Bestehende Abende:** Sie bekommen in der Migration `'legacy'`, das ist die bisherige Sortierung aus `calculatePlayerStats`. Sie wird unverändert als `rankLegacy` erhalten.
+- **Neue Abende:** Sie bekommen `'dtkv2026'`, über den Default der Spalte, und die App setzt den Wert zusätzlich ausdrücklich.
+- **Alle Stellen**, die eine Rangfolge eines Abends zeigen oder verwenden, wählen die Funktion nach `ranking_rule`. Eine rückwirkende Umstellung alter Abende ist eine Entscheidung des Nutzers (11.1) und **nicht** Teil dieses Schritts.
+
+### 6.4 Jahrestabellen: analog SO § 2 Abs. 6
+
+SO § 2 Abs. 6 (Einzelwertung in einer Liga) nennt diese Reihenfolge:
+1. gewonnene Punkte (absteigend)
+2. **weniger verlorene Punkte** (aufsteigend)
+3. Tordifferenz
+4. geschossene Tore
+
+Der heutige Code lässt Punkt 2 aus. Das ist wichtig, weil Spieler unterschiedlich viele Spiele haben.
+
+- **Geprüft am 12.11.2026 (live, nur lesend):** Die Reihenfolge der aktuellen Jahrestabellen ändert sich dadurch **nicht**. Die Umstellung ist also gefahrlos.
+- **Völlige Gleichheit:** Sie ist im Liga-Sinn unentschieden (SO § 2 Abs. 5 Satz 2 sieht dort ein Entscheidungsspiel vor). Die Tabelle zeigt dann dieselbe Platzzahl.
+
+### 6.5 Ewige Tabelle (Vereinsregel, unverändert)
+
+Die SO kennt keine ewige Tabelle. Es bleibt bei Punkte → Meistertitel (`EternalLeagueTable.tsx`). Bei Gleichheit wird dieselbe Platzzahl gezeigt. Ergänzt wird nur das, damit die Sortierung eindeutig ist und nicht von der Datenreihenfolge abhängt.
+
+### 6.6 Schweizer System, Vorrunde (Vereinsregel, ergänzt)
+
+Die SO erlaubt das Schweizer System (§ 8 Abs. 5 Sätze 18 bis 24). Sie sagt nur, dass sich die Play-Off-Paarungen „anhand der Platzierung im Schweizer System“ ergeben. **Wertungskriterien nennt sie nicht**, Buchholz oder Ähnliches kommt nicht vor. **Ergänzte Regel:** Die bisherigen Kriterien bleiben, damit sich nichts am gewohnten Ablauf ändert. Der Rest wird eindeutig gemacht:
+
+1. Punkte pro Spiel. Damit benachteiligt ein Freilos niemanden.
+2. Buchholz: Durchschnitt der Punkte pro Spiel aller bisherigen Gegner.
+3. Tordifferenz
+4. geschossene Tore
+5. direkter Vergleich, falls die beiden gegeneinander gespielt haben
+6. **Los**: Es wird einmal gezogen und im `swiss_state` gespeichert, damit sich die Reihenfolge beim Neuladen nicht ändert.
+
+Die Kriterien 4 bis 6 sind neu. Diese Rangliste bestimmt die Auslosung (Schritt B, R4) und die Setzliste fürs Playoff (SO § 8 Abs. 5 Satz 24).
+
+### 6.7 K.-o.-Spiele, Playoff, Finale und Entscheidungsspiele: kein Unentschieden
+
+- **Regel:** Im K.-o.-Spiel gewinnt, wer die meisten Tore erzielt (SO § 9 Abs. 1). Bei Gleichstand wird mit Sudden Death weitergespielt, bis ein Tor fällt (§ 9 Abs. 2). Im Finale gibt es erst eine Verlängerung von 2 × 2 Minuten, dann eine Neuansetzung und dann Sudden Death (§ 9 Abs. 3). Ein K.-o.-Spiel hat also nie ein unentschiedenes Endergebnis.
+- **Heute:** Die App nimmt im Playoff ein Unentschieden an. `playoffMatchWinner` liefert dann `null`, und das Playoff hängt.
+- **Neu:** Die Eingabe eines gleichen Ergebnisses in einem Playoff- oder Entscheidungsspiel wird abgelehnt, mit dem Hinweis „Im K.-o.-Spiel gibt es kein Unentschieden. Bitte das Endergebnis inklusive Sudden-Death-Tor eintragen.“ Die Validierung gilt in `PlayoffBracket.tsx` und überall dort, wo Playoff-Ergebnisse gespeichert werden.
+- **Nicht umgesetzt:** Halbe Punkte nach Sudden Death (§ 9 Abs. 6: Sieg 1,5 / Niederlage 0,5) gelten laut SO nur für die Gesamtplatzierung der im Playoff Ausgeschiedenen. Die App rechnet Playoff-Spiele weiter mit 2/0 in die Turnierwertung. Das wird dem Nutzer mitgeteilt (11).
+
+### 6.8 Migration für Schritt W
+
+```sql
+-- supabase/migrations/<timestamp>_ranking_rule.sql
+-- Each evening keeps the ranking rule it was played under, so past winners never change silently.
+ALTER TABLE public.training_sessions ADD COLUMN IF NOT EXISTS ranking_rule text;
+UPDATE public.training_sessions SET ranking_rule = 'legacy' WHERE ranking_rule IS NULL;   -- only the new column
+ALTER TABLE public.training_sessions ALTER COLUMN ranking_rule SET DEFAULT 'dtkv2026';
+ALTER TABLE public.training_sessions ALTER COLUMN ranking_rule SET NOT NULL;
+ALTER TABLE public.training_sessions ADD CONSTRAINT training_sessions_ranking_rule_check CHECK (ranking_rule IN ('legacy', 'dtkv2026'));
+-- Result of a decider (Entscheidungsspiel/-runde) for a complete tie at place 1 or 2: [{ "players": [id, ...], "order": [id, ...] }]
+ALTER TABLE public.training_sessions ADD COLUMN IF NOT EXISTS decider_results jsonb;
+```
+
+Das `UPDATE` füllt nur die neue Spalte und ist deshalb erlaubt (Regel 4). Der Fingerabdruck muss vorher und nachher identisch sein, weil er die neuen Spalten nicht liest. Prüfe zusätzlich: `SELECT ranking_rule, count(*) FROM training_sessions GROUP BY 1` liefert nur `legacy`.
+
+- **Probe zuerst:** Erst die Probe-DB (4.1), dann 🛑 Zustimmung, dann live.
+- **App ohne Migration:** Fehlt die Spalte (Vorschau vor der Migration), behandelt die App alle Abende als `legacy`, neue eingeschlossen. So ändert sich nichts, solange die Migration nicht live ist.
+- **Laufender Abend:** Wird zum Zeitpunkt der Migration gerade ein Abend gespielt, bekommt er `legacy`. Deshalb gilt Regel 9: keine Migration während eines Trainings.
+- **Zeitfenster zwischen Migration und Auslieferung:** Nach der Migration bekommen neue Abende per Default `dtkv2026`. Die noch laufende alte App-Version würde sie aber nach der alten Regel anzeigen und übertragen. Merge den PR deshalb direkt nach der Migration und prüfe, dass das Vercel-Deployment fertig ist. In diesem Zeitfenster darf kein Abend gestartet werden. Sprich das mit dem Nutzer ab.
+
+### 6.9 Umsetzung im Code
+
+- **Neue Datei `src/lib/ranking.ts`** (rein funktional, ohne React und ohne Supabase). Inhalt:
+  - `rankGroupDtkv(players, matches, deciders?)`: liefert Blöcke, wie die Referenz.
+  - `rankLegacy(stats, matches)`: die heutige Sortierung, unverändert aus `calculatePlayerStats` übernommen.
+  - `rankSession(session)`: wählt nach `session.rankingRule` und `session.tournamentType`. Liefert `{ player, stats, place, tiedWith }[]`.
+  - `compareLeagueRows`: nach 6.4.
+  - `compareEternalRows`: nach 6.5.
+  - `rankSwiss`: nach 6.6.
+- **`calculatePlayerStats`** berechnet weiter nur die Zahlen. Das Sortieren übernimmt `ranking.ts`.
+- **`TrainingSession`** bekommt `rankingRule?: 'legacy' | 'dtkv2026'` und `deciderResults?`. `storage.ts` liest und schreibt beides. Fehlt die Spalte beim Lesen, gilt `'legacy'`.
+- **Alle Stellen umstellen**, die heute selbst sortieren oder `calculatePlayerStats(...)[0]` als Sieger nehmen. Zum Stand `main` am 12.11.2026 sind das:
+  - `src/pages/Training.tsx` (Tabelle, Sieger und Vize beim Übertragen, Sortierung der Liga nach dem Übertragen)
+  - `src/pages/History.tsx` (Liste und Details; Abende mit `tournamentType = 'swiss'` mit der Swiss-Rangliste)
+  - `src/lib/exportPdf.ts` und `src/lib/exportXlsx.ts` (Tabelle und Sieger)
+  - `src/lib/statistics.ts` (`eveningWinner`)
+  - `src/pages/Leagues.tsx` (Sortierung nach dem Bearbeiten)
+  - `src/components/EternalLeagueTable.tsx`
+  - `src/pages/SchweizSystem.tsx` und `src/pages/swissHelpers.ts` (Rangliste, Sieger und Vize, Ligasortierung)
+  - `src/lib/swissPairing.ts` (`computeSwissStats`-Sortierung)
+  Suche zur Kontrolle mit `grep -rn "calculatePlayerStats\|\.sort((a, b)" src`.
+- **Anzeige von Gleichstand:** Die Tabellenkomponenten (`StandingsTable`, Liga-Tabellen, PDF und Excel) zeigen bei Gleichstand dieselbe Platzzahl.
+- **Erläuterung:** Ein kurzer Hinweis unter der Abendtabelle („Bei Punktgleichheit: direkter Vergleich, dann Tordifferenz und Tore nach DTKV-Spielordnung § 8 Abs. 3“). Er erscheint nur für `dtkv2026`.
+
+### 6.10 Abnahme Schritt W
+
+- Die 6 Pflichtfälle und die Eigenschaftstests sind grün. Die Mutationen schlagen an: Direkter Vergleich entfernt, Untergruppe nicht neu gerechnet, Tore aus der falschen Gruppe.
+- **Altdaten-Test:** Alle `legacy`-Abende aus dem Backup zeigen in Historie, PDF, Excel und Statistik denselben Sieger und dieselbe Reihenfolge wie vorher. Vergleiche über einen Test mit den Backup-Daten oder einen Browsertest.
+- **Neuer Abend:** Er speichert `ranking_rule = 'dtkv2026'` und wird nach DTKV sortiert. Prüfe das per Browsertest mit zustandsbehaftetem Mock und dem Fall 1 aus 6.1.
+- **Entscheidungsspiel-Dialog:** Er erscheint bei völligem Gleichstand um Platz 1 und schreibt `decider_results`.
+- **Playoff:** Ein unentschiedenes Ergebnis wird abgelehnt.
+- **Fingerabdruck:** Er ist live vorher und nachher identisch.
+
+---
+
+## 7. Schritt B: Schweizer System neu
+
+**Branch:** `feat/swiss-rewrite`. Enthält eine additive Migration (7.6).
+
+### 7.1 Was heute kaputt ist (belegt, siehe Anhang)
 
 1. **Wiederholungsspiele:** `generateSwissRoundMatches` paart gierig von oben nach unten und weicht auf ein Wiederholungsspiel aus, wenn es nicht weiterkommt. In Simulationen kam es dadurch in 47 bis 80 % der Turniere zu einem **vermeidbaren** Wiederholungsspiel.
 2. **Schiedsrichter-Modus fehlerhaft** (`generateRefereeRound`):
@@ -189,23 +368,23 @@ Das ist eine lauffähige Referenz des Algorithmus aus Schritt B, inklusive Simul
 5. **Nur im Browser gespeichert:** Der Turnierzustand liegt nur im `localStorage` (`swiss-session-v1`). Bei leerem Akku, Gerätewechsel oder gelöschten Browserdaten ist das laufende Turnier weg.
 6. **Übertragung ins Ligen-Format:** `handleTransferResults` in `SchweizSystem.tsx` ignoriert `league.isEternal`. In die Ewige Tabelle bucht sie Siege, Tore und Vizetitel. Beim Training werden dort nur Punkte und Meistertitel gebucht. Außerdem speichert sie zuerst die Ligen und erst danach den Abend. Bricht es dazwischen ab, steht die Übertragung nur im Browser.
 
-### 6.2 Fachregeln (verbindlich)
+### 7.2 Fachregeln (verbindlich)
 
 - **R1 Keine Wiederholung:** In der Vorrunde eines Turniers, also in allen Runden und im Schiedsrichter-Modus in beiden Durchgängen, spielt jedes Spielerpaar höchstens einmal gegeneinander. Das Playoff ist ausgenommen.
 - **R2 Höchstens ein Freilos:** Bei ungerader Spielerzahl bekommt pro Runde genau ein Spieler ein Freilos, und jeder Spieler höchstens eins pro Turnier.
 - **R3 Vollständige Runde:** Jeder Spieler, der kein Freilos hat, spielt pro Runde genau ein Spiel. Niemand fehlt, niemand spielt doppelt. Im Schiedsrichter-Modus spielt er dieses eine Spiel in genau einem der beiden Durchgänge.
-- **R4 Ähnliche Stärke:** Runde 1 wird zufällig gelost. Ab Runde 2 wird nach dem aktuellen Tabellenstand gepaart, also so, wie `computeSwissStats` sortiert. Bevorzugt wird ein Gegner mit möglichst ähnlichem Rang, ohne R1 zu verletzen.
+- **R4 Ähnliche Stärke:** Runde 1 wird zufällig gelost. Ab Runde 2 wird nach dem aktuellen Tabellenstand gepaart, also nach der Swiss-Rangliste aus Schritt W (6.6). Bevorzugt wird ein Gegner mit möglichst ähnlichem Rang, ohne R1 zu verletzen.
 - **R5 Freilos nach unten:** Das Freilos geht bevorzugt an den Rangniedrigsten, der noch keins hatte.
 - **R6 Vorausschau:** Eine Runde wird nur so gelost, dass alle noch geplanten Runden danach ohne Wiederholung lösbar bleiben. Das Turnier kann also nie in einer Sackgasse landen.
 - **R7 Rundenzahl:** Höchstens `n − 1` Runden bei gerader und `n` Runden bei ungerader Spielerzahl, mit jeweils einem Freilos pro Spieler. Die obere Grenze bleibt zusätzlich bei 10. Der Regler passt sich der Spielerzahl an. Ist die gewählte Rundenzahl beim Start zu hoch, wird sie mit Hinweis begrenzt.
 - **R8 Schiedsrichter-Modus:**
   - Zuerst wird die ganze Runde nach R1 bis R6 ausgelost.
   - Dann werden die Spiele nach Rang im Reißverschluss auf die Durchgänge verteilt: Spiel 1 (die besten beiden) in Durchgang 1, Spiel 2 in Durchgang 2, Spiel 3 in Durchgang 1 und so weiter.
-  - **Schiedsrichter eines Durchgangs** sind die Spieler, die im **anderen** Durchgang spielen.
+  - **Schiedsrichter eines Durchgangs** sind die Spieler, die im **anderen** Durchgang spielen, **plus der Spieler mit Freilos**. Er spielt in dieser Runde nicht und steht deshalb in beiden Durchgängen als Schiedsrichter zur Verfügung (Entscheidung des Nutzers vom 12.11.2026: Freilos und Schiedsrichter widersprechen sich nicht). In der Anzeige erscheint er unter „Schiedsrichter“ und zusätzlich, wie heute, als „Spielfrei“.
   - Die Durchgänge können sich um ein Spiel unterscheiden. Das ist gewollt, denn genau das behebt den Absturz bei 6, 7, 10, 11 und 14 Spielern.
 - **R9 Klarer Fehlerfall:** Lässt sich eine Runde trotzdem nicht auslosen (darf nach R6 nicht vorkommen), wird **kein** Wiederholungsspiel erzeugt. Stattdessen erscheint eine verständliche Fehlermeldung als Toast, und der Zustand bleibt unverändert.
 
-### 6.3 Algorithmus (siehe `scripts/swiss-pairing-prototype.mjs`)
+### 7.3 Algorithmus (siehe `scripts/swiss-pairing-prototype.mjs`)
 
 Neue Datei `src/lib/swissPairingEngine.ts`, rein funktional, ohne React und ohne Supabase:
 
@@ -253,17 +432,17 @@ export function maxSwissRounds(playerCount: number): number;                // R
 
 **Aufrufer in `SchweizSystem.tsx`:** `advanceToNextRound` muss `SwissPairingError` und `PairingBudgetError` abfangen. Dann erscheint ein Toast, etwa „Für Runde X ist keine Auslosung ohne Wiederholung möglich. Bitte Rundenzahl prüfen.“, und der Zustand bleibt unverändert. Kein ungefangener Fehler mehr.
 
-### 6.4 Rundenzahl in der UI (R7)
+### 7.4 Rundenzahl in der UI (R7)
 
 - **Regler:** `max = Math.min(10, maxSwissRounds(players.length))`, `min = 1`. Die Empfehlung `⌈log₂ n⌉` bleibt, wird aber auf das Maximum begrenzt.
 - **Start:** Ist `config.rounds > maxSwissRounds(n)`, wird die Zahl mit Hinweis auf das Maximum gesetzt.
 - **Schiedsrichter-Modus:** Er braucht weiterhin mindestens 4 Spieler. Das ist bereits vorhanden.
 
-### 6.5 Speichern in der Datenbank statt nur im Browser
+### 7.5 Speichern in der Datenbank statt nur im Browser
 
 **Ziel:** Ein laufendes Turnier überlebt einen Neustart des Browsers und einen Gerätewechsel. Zuschauer können es mitlesen. Das Verhalten soll dem Training entsprechen.
 
-- **Neue Spalte** `training_sessions.swiss_state jsonb NULL` (Migration 6.6). Sie enthält das komplette `SwissSession`-Objekt (Konfiguration, Runden mit Durchgängen, Schiedsrichtern, Freilosen, Playoff).
+- **Neue Spalte** `training_sessions.swiss_state jsonb NULL` (Migration 7.6). Sie enthält das komplette `SwissSession`-Objekt (Konfiguration, Runden mit Durchgängen, Schiedsrichtern, Freilosen, Playoff).
 - **Speichern:** Jede Änderung speichert mit der vorhandenen Warteschlange `createSaveQueue` (wie `useSessionAutosave`):
   1. `training_sessions` per Upsert: `id = session.id`, `tournament_type = 'swiss'`, `is_completed`, `name`, `date`, `round_count`, `matches_per_pairing = 1`, `transferred_to_leagues`, `swiss_state`.
   2. Spieler und Spiele mit den vorhandenen Funktionen aus `storage.ts` (`syncPlayers`, `syncMatches` über `convertSwissToTrainingSession`). Dann funktionieren Historie, Statistik und Exporte unverändert.
@@ -273,9 +452,9 @@ export function maxSwissRounds(playerCount: number): number;                // R
 - **Übernahme vom Gerät** (wichtig gegen Datenverlust): Gibt es beim Laden der Seite als Admin `localStorage['swiss-session-v1']` und in der DB keinen Abend mit dieser `id`, speichere das Turnier einmal in die DB. Erscheint der Toast „Turnier vom Gerät übernommen“, entferne den alten Schlüssel **erst nach** bestätigtem Speichern. Gibt es beide und weichen sie voneinander ab, gewinnt die DB-Version. Die Gerätefassung bleibt dann unter `swiss-session-v1-conflict-<datum>` liegen. Nichts wird stillschweigend gelöscht.
 - **Nur Admins speichern.** Zuschauer laden lesend und sehen keine Bearbeitungsknöpfe.
 - **Abschluss:** Erst den Abend als abgeschlossen speichern, dann in die Ligen übertragen. Fehlt danach eine Liga, ist das wiederholbar über `transferred_to_leagues`. In Schritt E wird das durch die Transaktion ersetzt.
-- **Ewige Tabelle** (Fehler 6.1.6): Die Swiss-Übertragung muss die Regel der Trainingsübertragung übernehmen. Bei `isEternal` werden nur `points`, `pointsAgainst` und `championships` gebucht, neue Spieler mit W/U/N und Toren = 0. Am besten ziehst du beide Übertragungen in eine gemeinsame, getestete Funktion `applySessionToLeague(league, stats, champion, vice)` in `src/lib/leagueTransfer.ts` zusammen. Die Trainingsseite nutzt sie ebenfalls. Bestehende Ligadaten werden **nicht** korrigiert, siehe Entscheidung 10.4.
+- **Ewige Tabelle** (Fehler 7.1.6): Die Swiss-Übertragung muss die Regel der Trainingsübertragung übernehmen. Bei `isEternal` werden nur `points`, `pointsAgainst` und `championships` gebucht, neue Spieler mit W/U/N und Toren = 0. Am besten ziehst du beide Übertragungen in eine gemeinsame, getestete Funktion `applySessionToLeague(league, stats, champion, vice)` in `src/lib/leagueTransfer.ts` zusammen. Die Trainingsseite nutzt sie ebenfalls. Bestehende Ligadaten werden **nicht** korrigiert, siehe Entscheidung 11.4.
 
-### 6.6 Migration für Schritt B
+### 7.6 Migration für Schritt B
 
 ```sql
 -- supabase/migrations/<timestamp>_swiss_state.sql
@@ -285,7 +464,7 @@ ALTER TABLE public.training_sessions ADD COLUMN IF NOT EXISTS swiss_state jsonb;
 
 Sie ist additiv. Die bestehenden Policies gelten auch für die neue Spalte. Zuerst die Probe (4.1) mit Fingerabdruck vorher und nachher, die Ausgaben müssen identisch sein. Dann 🛑 Zustimmung einholen, dann `apply_migration`, dann den Fingerabdruck live. Die App muss ohne die Spalte weiterlaufen: Fehlt sie, fällt sie auf den `localStorage` zurück und zeigt den Hinweis „Turnier wird nur auf diesem Gerät gespeichert“. Damit funktioniert auch die Vercel-Vorschau vor der Migration.
 
-### 6.7 Tests (Pflicht)
+### 7.7 Tests (Pflicht)
 
 1. **Engine-Unit-Tests** (`src/lib/__tests__/swissPairingEngine.test.ts`) mit einem gesäten Zufallsgenerator (zum Beispiel mulberry32):
    - Für n = 4 bis 16 und jede Rundenzahl 1 bis `maxSwissRounds(n)`, je mindestens 200 simulierte Turniere mit Zufallsergebnissen, müssen alle Regeln halten:
@@ -303,7 +482,8 @@ Sie ist additiv. Die bestehenden Policies gelten auch für die neue Spalte. Zuer
    - Jeder Aktive spielt genau einmal pro Runde.
    - Die Schiedsrichter jedes Durchgangs sind genau die Spieler des anderen Durchgangs.
    - 0 Wiederholungen, kein Absturz.
-3. **Playoff:** Eine Wiederholung aus der Vorrunde ist im Playoff erlaubt. Ein Test zeigt, dass zwei Vorrunden-Gegner im Halbfinale aufeinandertreffen können und die Auslosung trotzdem läuft.
+3. **Playoff:** Eine Wiederholung aus der Vorrunde ist im Playoff erlaubt. Ein Test zeigt, dass zwei Vorrunden-Gegner im Halbfinale aufeinandertreffen können und die Auslosung trotzdem läuft. Ein unentschiedenes Playoff-Ergebnis wird abgelehnt (6.7).
+   - **Schiedsrichter mit Freilos:** Bei ungerader Spielerzahl im Schiedsrichter-Modus steht der Spieler mit Freilos in den Schiedsrichterlisten **beider** Durchgänge, aber in keinem Spiel.
 4. **Übertragung** (`leagueTransfer.test.ts`):
    - Normale Liga: Alle Spalten werden addiert, plus Meister- und Vizetitel.
    - Ewige Tabelle: nur Punkte, Gegenpunkte und Meistertitel, sowohl für Training als auch für Swiss.
@@ -318,7 +498,7 @@ Sie ist additiv. Die bestehenden Policies gelten auch für die neue Spalte. Zuer
 
 ---
 
-## 7. Schritt C: Doppelte Spielerzeilen bereinigen
+## 8. Schritt C: Doppelte Spielerzeilen bereinigen
 
 **Branch:** `fix/duplicate-training-players`.
 
@@ -347,11 +527,13 @@ Sie ist additiv. Die bestehenden Policies gelten auch für die neue Spalte. Zuer
 
 ---
 
-## 8. Schritt D: Feste Spieler-Identität
+## 9. Schritt D: Feste Spieler-Identität (später)
+
+> **Stand nach Rücksprache am 12.11.2026:** Der Nutzer klammert die Namensfrage für die **Jahrestabellen** aus. Dort sieht er in der Oberfläche keine doppelten Namen. Die **Ewige Tabelle** prüft er mit dir in einem eigenen nächsten Schritt: mögliche Duplikate „Klaudio Lange“ und „Benjamin Buza“. Schritt D und E werden erst nach dieser Prüfung und nach ausdrücklicher Freigabe begonnen. Bis dahin ist der folgende Text nur die Vorlage.
 
 **Branch:** `feat/player-identity`. Groß, deshalb in Teilschritten mit je eigenem PR, wenn sinnvoll.
 
-### 8.1 Problem
+### 9.1 Problem
 
 Heute ist ein Spieler nur ein Name.
 - **Abende:** `training_players.player_id` ist pro Abend neu zufällig. „Max Daub“ hat 13 verschiedene IDs.
@@ -363,7 +545,7 @@ Folgen in den echten Daten:
 - **Doppelte Spieler:** In „Ewige Tabelle Training“ stehen „Klaudio Lange“ und „Benjamin Buza“ je zweimal.
 - **Verdächtiger Name:** Es gibt den Eintrag „Tim KumpelMaxi“, wahrscheinlich ein Tippfehler. 🛑 Den Nutzer fragen.
 
-### 8.2 Zielmodell (additiv)
+### 9.2 Zielmodell (additiv)
 
 ```sql
 CREATE TABLE public.players (
@@ -393,7 +575,7 @@ CREATE POLICY "Authenticated write player_aliases" ON public.player_aliases FOR 
 
 Die Namensspalten (`player_name`, `home_player_name` …) bleiben und werden weiter geschrieben. Sie sind die lesbare Kopie und der Rückweg.
 
-### 8.3 Zuordnung der Namen (🛑, menschliche Entscheidung)
+### 9.3 Zuordnung der Namen (🛑, menschliche Entscheidung)
 
 1. Erzeuge per `SELECT` eine Liste aller verschiedenen Namen aus `training_players`, `matches` und `player_stats`, mit Häufigkeit und Liga. Laut Backup sind es 34 Namen in Abenden und 210 in Ligen.
 2. Schlage Gruppen vor: gleicher Name ohne Groß-/Kleinschreibung und Leerzeichen, Vorname gleich, Ähnlichkeit über `calculateSimilarity` aus `pairingGenerator.ts`. **Nur Vorschläge.**
@@ -404,7 +586,7 @@ Die Namensspalten (`player_name`, `home_player_name` …) bleiben und werden wei
    - **Ausnahme:** Bei der Ewigen Tabelle mit 205 historischen Namen dürfen Namen ohne Abend eigene Spieler werden.
    - Die Ausgabe des Fingerabdrucks bleibt identisch, weil nur neue Spalten gefüllt werden.
 
-### 8.4 App
+### 9.4 App
 
 - **Spielererfassung** (Training und Swiss, `PlayerInput`): Es gibt eine Auswahl aus `players` mit Suche, und neue Spieler werden erst nach Bestätigung angelegt („Neuer Spieler ‚Maxi‘ anlegen?“, mit Hinweis auf ähnliche Namen). Neue Abende schreiben `player_ref`, außerdem `player_id = players.id`, damit IDs über Abende stabil sind.
 - **Übertragungsdialog:** Der Ähnlichkeitsabgleich entfällt für Spieler mit Referenz. Übertragen wird über `player_ref`.
@@ -413,11 +595,11 @@ Die Namensspalten (`player_name`, `home_player_name` …) bleiben und werden wei
 
 ---
 
-## 9. Schritt E: Ligen aus den Abenden berechnen, Abschluss in einer Transaktion
+## 10. Schritt E: Ligen aus den Abenden berechnen (später)
 
 **Branch:** `feat/derived-leagues`. Erst nach D.
 
-### 9.1 Problem
+### 10.1 Problem
 
 `player_stats` sind mitgeführte Summen.
 - **Lokale Kopie überschreibt:** `saveLeague` schreibt die **komplette lokale Kopie** einer Liga und löscht Zeilen, die darin fehlen. Bei zwei offenen Geräten oder Tabs gewinnt der Letzte.
@@ -428,9 +610,9 @@ Der Fingerabdruck zeigt bereits Ungereimtheiten:
 - **„Tabelle 2026“:** 711 Siege gegen 713 Niederlagen und 5169:5136 Tore. In einer geschlossenen Liga müssten beide Seiten gleich sein. Ursache sind historische Startwerte und manuelle Änderungen.
 - **„Ewige Tabelle Training“:** 36 Siege, 12 Unentschieden und 1 Vizetitel, obwohl dort nur Punkte und Meistertitel gebucht werden sollen. Das ist die Spur der fehlerhaften Swiss-Übertragung.
 
-**Diese Werte werden nicht korrigiert.** Sie werden exakt übernommen, siehe 9.3.
+**Diese Werte werden nicht korrigiert.** Sie werden exakt übernommen, siehe 10.3.
 
-### 9.2 Zielmodell (additiv)
+### 10.2 Zielmodell (additiv)
 
 ```sql
 CREATE TABLE public.league_sessions (            -- "Abend X zählt für Liga Y"
@@ -461,12 +643,12 @@ CREATE TABLE public.league_adjustments (        -- manuelle Korrekturen mit Begr
 );
 ALTER TABLE public.training_sessions ADD COLUMN IF NOT EXISTS champion_ref uuid REFERENCES public.players(id);
 ALTER TABLE public.training_sessions ADD COLUMN IF NOT EXISTS vice_ref uuid REFERENCES public.players(id);
--- RLS für die drei neuen Tabellen wie in 8.2
+-- RLS für die drei neuen Tabellen wie in 9.2
 ```
 
-**Warum `champion_ref` und `vice_ref`:** Punkte und Tore lassen sich jederzeit aus den Ergebnissen berechnen. Meister und Vize hängen aber von der Wertungsregel bei Gleichstand ab (siehe 10.1). Würde man sie neu berechnen, könnten sich alte Titel ändern, wenn die Regel später angepasst wird. Deshalb werden sie beim Abschluss **eingefroren**.
+**Warum `champion_ref` und `vice_ref`:** Punkte und Tore lassen sich jederzeit aus den Ergebnissen berechnen. Meister und Vize hängen aber von der Wertungsregel bei Gleichstand ab (siehe Schritt W). Würde man sie neu berechnen, könnten sich alte Titel ändern, wenn die Regel später angepasst wird. Deshalb werden sie beim Abschluss **eingefroren**.
 
-### 9.3 Rechenregel und Startbestand
+### 10.3 Rechenregel und Startbestand
 
 **Neue reine Funktion** `computeLeagueStandings(league, sessionsOfLeague, openingBalances, adjustments)` in `src/lib/leagueStandings.ts`:
 
@@ -474,7 +656,7 @@ ALTER TABLE public.training_sessions ADD COLUMN IF NOT EXISTS vice_ref uuid REFE
 Stand(Spieler) = Startbestand + Σ Beitrag(Abend, Liga) über league_sessions + Σ Korrekturen
 ```
 
-**`Beitrag(Abend, Liga)`** wird nach den heutigen Regeln berechnet, über `applySessionToLeague` aus 6.5:
+**`Beitrag(Abend, Liga)`** wird nach den heutigen Regeln berechnet, über `applySessionToLeague` aus 7.5:
 - **Statistik eines Abends:**
   - Training: `calculatePlayerStats(session.players, session.matches)`.
   - Swiss: `computeFinalSwissStats`, also Vorrunde plus Playoff.
@@ -490,12 +672,12 @@ Stand(Spieler) = Startbestand + Σ Beitrag(Abend, Liga) über league_sessions + 
 - **Negative Werte im Startbestand:** Sie bedeuten, dass ein Abend mehr beigetragen hat, als in der Liga steht. Das passiert zum Beispiel, wenn beim Übertragen ein Name falsch zugeordnet wurde. In diesem Fall **nicht** stillschweigend übernehmen, sondern dem Nutzer auflisten 🛑.
 - **Rückfüllen:** `champion_ref` und `vice_ref` bestehender Abende werden mit der heutigen Logik gefüllt. `league_sessions` wird aus `training_sessions.transferred_to_leagues` gefüllt.
 
-### 9.4 Schattenbetrieb vor dem Umschalten
+### 10.4 Schattenbetrieb vor dem Umschalten
 
 1. Die App berechnet für jede Liga den neuen Stand und vergleicht ihn mit `player_stats`: zuerst nur in einem Test gegen das Backup, dann in einem Admin-Bereich der Ligenseite („Prüfung: berechnet = gespeichert ✓“).
 2. **Erst wenn für alle Ligen jede Zeile und jede Spalte übereinstimmt**, wird umgeschaltet 🛑.
 
-### 9.5 Abschluss in einer Transaktion
+### 10.5 Abschluss in einer Transaktion
 
 Die Postgres-Funktion `complete_session(p_session_id uuid, p_league_ids uuid[], p_champion uuid, p_vice uuid)` (`SECURITY INVOKER`, damit RLS gilt) erledigt in einer Transaktion:
 - `is_completed = true`
@@ -505,7 +687,7 @@ Die Postgres-Funktion `complete_session(p_session_id uuid, p_league_ids uuid[], 
 
 Sie wird per `supabase.rpc('complete_session', …)` aufgerufen und ersetzt die Einzelschritte in `Training.tsx` (`handleTransferResults`) und `SchweizSystem.tsx`. Einen Abend aus einer Liga zu entfernen bedeutet nur noch, eine Zeile aus `league_sessions` zu löschen (Admin, mit Bestätigung).
 
-### 9.6 Umschalten und Übergang
+### 10.6 Umschalten und Übergang
 
 - **Lesen:** Die Ligen kommen nur noch aus `computeLeagueStandings`.
 - **Übergang:** Während des Übergangs schreibt die App `player_stats` zusätzlich weiter (Dual-Write). So bleibt ein Rückweg auf die alte Version offen.
@@ -514,24 +696,31 @@ Sie wird per `supabase.rpc('complete_session', …)` aufgerufen und ersetzt die 
 
 ---
 
-## 10. Offene Entscheidungen des Nutzers
+## 11. Entscheidungen des Nutzers
 
-Diese Punkte nicht selbst entscheiden. Bis zur Entscheidung bleibt das heutige Verhalten.
+### Bereits entschieden (12.11.2026)
 
-1. **Wertung bei Gleichstand am Abend:** Heute gilt Punkte → Tordifferenz → geschossene Tore → Gegentore → direkter Vergleich (`calculatePlayerStats`).
-   - Der Schritt „Gegentore“ ist wirkungslos, denn bei gleicher Differenz und gleichen Toren sind die Gegentore gleich.
-   - Der direkte Vergleich wird paarweise in der Sortierung angewandt. Bei drei Spielern im Kreis ist das Ergebnis zufällig.
-   - Bei völligem Gleichstand entscheidet die Reihenfolge der Daten über den Meistertitel.
-   - Der Verein sollte festlegen, welche Kriterien in welcher Reihenfolge gelten und was bei völligem Gleichstand passiert (geteilt, Stechen oder Los).
-2. **Wertung im Schweizer System:** Heute gilt Punkte pro Spiel → Buchholz → Tordifferenz. Bleibt das so?
-3. **Schiedsrichter-Modus:** Pfeift der Spieler mit Freilos in beiden Durchgängen mit? Standard: nein.
-4. **Alte Ungereimtheiten in den Ligen** (9.1): Sollen sie bleiben (Standard, über den Startbestand) oder später über `league_adjustments` mit Begründung korrigiert werden?
-5. **Namenszuordnung** (8.3): Welche Namen gehören zu derselben Person? Was ist „Tim KumpelMaxi“?
-6. **Admin-Recht:** Heute ist jeder angemeldete Nutzer Admin (`isAdmin = !!user`). Das ist sicher, solange die Registrierung aus ist. Soll zusätzlich ein ausdrückliches Admin-Kennzeichen eingeführt werden, das auch die Datenbankregeln prüfen?
+- **Wertung bei Gleichstand:** nach DTKV-Spielordnung 2026, siehe Schritt W. Für den Abend gilt § 8 Abs. 3, für die Jahrestabelle analog § 2 Abs. 6.
+- **Freilos im Schiedsrichter-Modus:** Der Spieler mit Freilos ist in beiden Durchgängen der Runde Schiedsrichter (R8).
+- **Namen in den Jahrestabellen:** ausgeklammert. Die Ewige Tabelle wird im nächsten Schritt gemeinsam geprüft (Schritt D, Hinweis oben).
+
+### Ergänzte Regeln, die der Nutzer bestätigen soll
+
+Diese Regeln stehen nicht in der Spielordnung. Bis zur Bestätigung werden sie wie beschrieben umgesetzt.
+1. **Völliger Gleichstand um Platz 1 oder 2 am Abend:** Entscheidungsspiel oder -runde mit Sudden Death, ohne Wertung in Punkten und Toren (6.2).
+2. **Wertung im Schweizer System:** Punkte pro Spiel → Buchholz → Tordifferenz → geschossene Tore → direkter Vergleich → gespeichertes Los (6.6).
+3. **Ewige Tabelle:** Punkte → Meistertitel, danach gleiche Platzzahl (6.5).
+
+### Noch offen
+
+1. **Rückwirkung:** Sollen vergangene Abende nach DTKV neu gewertet werden? Standard: nein, sie bleiben `legacy` (6.3). Bei einer Umstellung würden sich ein Tagessieg (Jugend 08.05.2026) und vier Vize ändern. Die bereits gezählten Titel in den Jahrestabellen müssten dann mit Begründung korrigiert werden.
+2. **Halbe Punkte nach Sudden Death** (§ 9 Abs. 6): Sie gelten laut SO nur für die Gesamtplatzierung der im Playoff Ausgeschiedenen und sind nicht umgesetzt. Soll die App sie für Swiss-Turniere ausweisen?
+3. **Alte Ungereimtheiten in den Ligen** (10.1): Bleiben sie (Standard, über den Startbestand) oder werden sie später über `league_adjustments` mit Begründung korrigiert?
+4. **Admin-Recht:** Heute ist jeder angemeldete Nutzer Admin (`isAdmin = !!user`). Das ist sicher, solange die Registrierung aus ist. Soll zusätzlich ein ausdrückliches Admin-Kennzeichen eingeführt werden, das auch die Datenbankregeln prüfen?
 
 ---
 
-## 11. Anhang: Befunde mit Belegen
+## 12. Anhang: Befunde mit Belegen
 
 Erhoben am 12.11.2026 auf `main` (Commit `f13e179`) und am Backup vom 06.11.2026.
 
@@ -548,3 +737,7 @@ Erhoben am 12.11.2026 auf `main` (Commit `f13e179`) und am Backup vom 06.11.2026
 | Wertung bei Gleichstand | `calculatePlayerStats` (`pairingGenerator.ts`): Schritt Gegentore wirkungslos, direkter Vergleich nicht transitiv |
 | Prototyp neue Auslosung | `scripts/swiss-pairing-prototype.mjs`: n = 4 bis 20 bis zur maximalen Rundenzahl, 0 Wiederholungen, 0 Fälle ohne Auslosung, höchstens 0,6 s pro Runde |
 | TypeScript streng | `tsc --strict` liefert genau 1 Fehler (`swissHelpers.ts:117`) |
+| Wertung weicht von DTKV ab | `calculatePlayerStats` sortiert Punkte → Tordifferenz → Tore → direkter Vergleich; SO § 8 Abs. 3 verlangt den direkten Vergleich bzw. die Untergruppe **vor** den Toren. Nachrechnung von 24 Abenden: 6 anders geordnet, 1 anderer Sieger, 4 andere Vize |
+| Jahrestabelle ohne „weniger verlorene Punkte“ | SO § 2 Abs. 6; an den aktuellen Jahrestabellen ändert die Ergänzung nichts (live geprüft) |
+| Playoff nimmt Unentschieden an | keine Prüfung in `PlayoffBracket.tsx`; `playoffMatchWinner` liefert bei Gleichstand `null`, das Playoff hängt; laut SO § 9 Abs. 1 bis 3 gibt es im K.-o.-Spiel kein Unentschieden |
+| Swiss-Wertung in der SO nicht geregelt | SO § 8 Abs. 5 nennt nur „Platzierung im Schweizer System“, keine Kriterien |
