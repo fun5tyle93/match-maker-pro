@@ -22,7 +22,7 @@ import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlayerRegistry } from '@/hooks/usePlayerRegistry';
 import { generatePairings } from '@/lib/pairingGenerator';
-import { pendingDeciders, rankPlayers, winnerAndRunnerUp, DeciderResult } from '@/lib/ranking';
+import { pendingDeciders, rankPlayers, leagueTitleHolders, DeciderResult } from '@/lib/ranking';
 import { applySessionToLeague, NameMatchesByLeague } from '@/lib/leagueTransfer';
 import { sameName } from '@/lib/nameMatching';
 import { DeciderDialog, DeciderGroup } from '@/components/DeciderDialog';
@@ -200,7 +200,7 @@ const Training = () => {
     const stats = ranked.stats;
 
     // Winner and runner-up only when their place is not shared (a tie at place 1 or 2 was decided before)
-    const { winner, runnerUp } = winnerAndRunnerUp(ranked);
+    const { winner, runnerUp } = leagueTitleHolders(ranked);
     const firstPlace = winner?.name;
     const secondPlace = runnerUp?.name;
     

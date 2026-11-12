@@ -7,6 +7,8 @@ import {
   computeStats,
   finalRankingFromTotals,
   finalRankingSwiss,
+  isOutOfCompetition,
+  leagueTitleHolders,
   pendingDeciders,
   placesFor,
   rankBlocksDtkv,
@@ -348,5 +350,69 @@ describe('final ranking of a Swiss tournament (Spielordnung 2026 § 9 Absatz 6)'
     expect(rows[0].points).toBe(4 + 2);   // Swiss: win, win; playoff: win
     expect(rows[1].points).toBe(1 + 0);   // Swiss: loss and draw; playoff: loss
     expect(rows[0].goalDifference).toBe(3 + 1 + 1);
+  });
+});
+
+
+describe('players out of competition ("a.K.")', () => {
+  const named = (names: string[]) => names.map(n => ({ id: n, name: n }));
+  // A beats everybody, B beats C and D, C beats D: ranks A, B, C, D (legacy places 1, 2, 3, 4)
+  const ranking = (names: string[]) =>
+    rankPlayers(named(names), [
+      game(names[0], names[1], 3, 0), game(names[0], names[2], 3, 0), game(names[0], names[3], 3, 0),
+      game(names[1], names[2], 2, 0), game(names[1], names[3], 2, 0), game(names[2], names[3], 1, 0),
+    ].map(m => ({ ...m, homePlayer: { id: m.homePlayer.id, name: m.homePlayer.id }, awayPlayer: { id: m.awayPlayer.id, name: m.awayPlayer.id } })), 'legacy');
+  const ids = (r: { winner?: Player; runnerUp?: Player }) => [r.winner?.id, r.runnerUp?.id];
+
+  it('recognises the marker, whatever the spelling, and nothing else', () => {
+    for (const name of ['Max Daub a.K.', 'max daub A.K.', 'Max Daub a. K.', 'Max Daub aK', 'Max Daub a.k', ' Max Daub a.K. ']) {
+      expect(isOutOfCompetition(name)).toBe(true);
+    }
+    for (const name of ['Max Daub', 'Mak', 'Frank', 'Jan Klak', 'Hanna K.', 'a.K. Max']) expect(isOutOfCompetition(name)).toBe(false);
+  });
+
+  it('is the same as winnerAndRunnerUp when nobody is out of competition', () => {
+    const r = ranking(['A', 'B', 'C', 'D']);
+    expect(leagueTitleHolders(r)).toEqual(winnerAndRunnerUp(r));
+    for (const scenario of [
+      rankPlayers(players(['A', 'B', 'C']), games([['A', 'B', 2, 2], ['A', 'C', 1, 0], ['B', 'C', 1, 0]]), 'dtkv2026'),
+      rankPlayers(players(['A', 'B', 'C', 'D']), games([['A', 'B', 3, 0], ['A', 'C', 3, 0], ['A', 'D', 3, 0], ['B', 'C', 1, 1], ['B', 'D', 1, 1], ['C', 'D', 1, 1]]), 'dtkv2026'),
+      rankPlayers(players(['A']), [], 'legacy'),
+      rankPlayers([], [], 'legacy'),
+    ]) {
+      expect(leagueTitleHolders(scenario)).toEqual(winnerAndRunnerUp(scenario));
+    }
+  });
+
+  it('lets the next player move up when the winner is out of competition', () => {
+    expect(ids(leagueTitleHolders(ranking(['A a.K.', 'B', 'C', 'D'])))).toEqual(['B', 'C']);
+  });
+
+  it('gives the runner-up title to the next player when the runner-up is out of competition', () => {
+    expect(ids(leagueTitleHolders(ranking(['A', 'B a.K.', 'C', 'D'])))).toEqual(['A', 'C']);
+  });
+
+  it('changes nothing when the player out of competition is further back', () => {
+    expect(ids(leagueTitleHolders(ranking(['A', 'B', 'C a.K.', 'D'])))).toEqual(['A', 'B']);
+    expect(ids(leagueTitleHolders(ranking(['A', 'B', 'C', 'D a.K.'])))).toEqual(['A', 'B']);
+  });
+
+  it('gives no runner-up when only one player is left, and no title when nobody is', () => {
+    expect(ids(leagueTitleHolders(rankPlayers(named(['A a.K.', 'B']), [{ ...game('A', 'B', 1, 0), homePlayer: { id: 'A a.K.', name: 'A a.K.' }, awayPlayer: { id: 'B', name: 'B' } }], 'legacy')))).toEqual(['B', undefined]);
+    expect(ids(leagueTitleHolders(rankPlayers(named(['A a.K.']), [], 'legacy')))).toEqual([undefined, undefined]);
+  });
+
+  it('still gives no title for a place that is shared after the move up', () => {
+    // dtkv2026: A out of competition and first; B and C level at place 2 -> they are level for the title now
+    const r = rankPlayers(named(['A a.K.', 'B', 'C', 'D']), [
+      { ...game('A', 'B', 3, 0), homePlayer: { id: 'A a.K.', name: 'A a.K.' }, awayPlayer: { id: 'B', name: 'B' } },
+      { ...game('A', 'C', 3, 0), homePlayer: { id: 'A a.K.', name: 'A a.K.' }, awayPlayer: { id: 'C', name: 'C' } },
+      { ...game('A', 'D', 3, 0), homePlayer: { id: 'A a.K.', name: 'A a.K.' }, awayPlayer: { id: 'D', name: 'D' } },
+      { ...game('B', 'C', 1, 1), homePlayer: { id: 'B', name: 'B' }, awayPlayer: { id: 'C', name: 'C' } },
+      { ...game('B', 'D', 1, 1), homePlayer: { id: 'B', name: 'B' }, awayPlayer: { id: 'D', name: 'D' } },
+      { ...game('C', 'D', 1, 1), homePlayer: { id: 'C', name: 'C' }, awayPlayer: { id: 'D', name: 'D' } },
+    ], 'dtkv2026');
+    expect(r.places.slice(1)).toEqual([2, 2, 2]);
+    expect(ids(leagueTitleHolders(r))).toEqual([undefined, undefined]);
   });
 });
