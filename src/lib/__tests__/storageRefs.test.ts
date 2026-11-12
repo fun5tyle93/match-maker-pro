@@ -249,6 +249,25 @@ describe('loadPlayerRegistry', () => {
     expect(registry.refByName.get('erik')).toBe('R-erik');
   });
 
+  it('tells the app that the identity columns exist: they come with the tables', async () => {
+    seed(false); // no row with the column was read, so far
+    const storage = await freshStorage();
+    await storage.loadPlayerRegistry();
+    state.db.training_players = [];
+    await storage.saveToHistory(session([p('p1', 'Erik', 'R-erik'), p('p2', 'Ben', 'R-ben')]));
+    expect(state.db.training_players.every(r => r.player_ref)).toBe(true);
+  });
+
+  it('does not claim the columns when the tables do not exist', async () => {
+    seed(false);
+    state.failOn = (_mode, table) => (table === 'players' ? { code: '42P01', message: 'relation "public.players" does not exist' } : false);
+    const storage = await freshStorage();
+    await storage.loadPlayerRegistry();
+    state.failOn = null;
+    await storage.saveToHistory(session([p('p1', 'Erik', 'R-erik'), p('p2', 'Ben', 'R-ben')]));
+    expect(state.db.training_players.some(r => 'player_ref' in r)).toBe(false);
+  });
+
   it('is empty (and the app keeps working by name) when the tables do not exist', async () => {
     seed(true);
     state.failOn = (_mode, table) => (table === 'players' ? { code: '42P01', message: 'relation "public.players" does not exist' } : false);

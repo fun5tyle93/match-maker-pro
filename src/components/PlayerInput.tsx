@@ -1,27 +1,25 @@
-import { useState } from 'react';
-import { Plus, X, Users } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { X, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PlayerNameField } from '@/components/PlayerNameField';
+import { sameName } from '@/lib/nameMatching';
+import { KnownPlayer } from '@/lib/playerPicker';
+import { PlayerRegistry } from '@/lib/playerRegistry';
 import { Player } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface PlayerInputProps {
   players: Player[];
-  onAddPlayer: (name: string) => void;
+  /** `ref` is the fixed identity of a player from the player list; missing for free text */
+  onAddPlayer: (name: string, ref?: string) => void;
   onRemovePlayer: (id: string) => void;
+  /** Known players; without it the field takes free text as before */
+  registry?: PlayerRegistry | null;
+  /** Adds a new person to the player list */
+  onCreatePlayer?: (name: string) => Promise<KnownPlayer>;
 }
 
-export function PlayerInput({ players, onAddPlayer, onRemovePlayer }: PlayerInputProps) {
-  const [newPlayerName, setNewPlayerName] = useState('');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPlayerName.trim()) {
-      onAddPlayer(newPlayerName.trim());
-      setNewPlayerName('');
-    }
-  };
+export function PlayerInput({ players, onAddPlayer, onRemovePlayer, registry = null, onCreatePlayer }: PlayerInputProps) {
+  const isTaken = (known: KnownPlayer) => players.some(p => p.ref === known.ref || sameName(p.name, known.name));
 
   return (
     <Card className="animate-fade-in">
@@ -32,18 +30,12 @@ export function PlayerInput({ players, onAddPlayer, onRemovePlayer }: PlayerInpu
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            type="text"
-            placeholder="Spielername eingeben..."
-            value={newPlayerName}
-            onChange={(e) => setNewPlayerName(e.target.value)}
-            className="flex-1"
-          />
-          <Button type="submit" size="icon" disabled={!newPlayerName.trim()}>
-            <Plus className="w-4 h-4" />
-          </Button>
-        </form>
+        <PlayerNameField
+          registry={registry}
+          onCreate={onCreatePlayer}
+          isTaken={isTaken}
+          onPick={picked => onAddPlayer(picked.name, picked.ref)}
+        />
 
         <div className="flex flex-wrap gap-2">
           {players.map((player, index) => (

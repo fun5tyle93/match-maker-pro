@@ -35,6 +35,7 @@ import { sessionFinalRanking } from '@/lib/swissRanking';
 import { FinalRankingTable } from '@/components/FinalRankingTable';
 import { SaveStatusBadge } from '@/components/SaveStatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlayerRegistry } from '@/hooks/usePlayerRegistry';
 import {
   loadLeagues, saveLeague, swissStateSupported, loadRunningSwissSession, saveSwissSession, discardSwissSession,
 } from '@/lib/storage';
@@ -69,6 +70,7 @@ function loadSwissFromDevice(): SwissSession | null {
 export default function SchweizSystem() {
   const navigate = useNavigate();
   const { isAdmin, loading: authLoading } = useAuth();
+  const { registry, addPlayer: createKnownPlayer } = usePlayerRegistry(isAdmin);
 
   // 'db': the running tournament lives in the database; 'local': the database cannot hold it yet (migration missing),
   // it stays in this browser as before
@@ -187,12 +189,13 @@ export default function SchweizSystem() {
 
   // ─── Player management ────────────────────────────────────────────────
 
-  const handleAddPlayer = (name: string) => {
-    if (players.some(p => sameName(p.name, name))) {
+  const handleAddPlayer = (name: string, ref?: string) => {
+    if (players.some(p => sameName(p.name, name) || (ref && p.ref === ref))) {
       toast.error('Spieler existiert bereits');
       return;
     }
-    setPlayers(prev => [...prev, { id: crypto.randomUUID(), name }]);
+    // A known player keeps its fixed id on every evening; free text gets an id of its own as before
+    setPlayers(prev => [...prev, { id: ref ?? crypto.randomUUID(), name, ...(ref ? { ref } : {}) }]);
   };
 
   const handleRemovePlayer = (id: string) => {
@@ -528,6 +531,8 @@ export default function SchweizSystem() {
                 players={players}
                 onAddPlayer={handleAddPlayer}
                 onRemovePlayer={handleRemovePlayer}
+                registry={registry}
+                onCreatePlayer={createKnownPlayer}
               />
 
               <Card className="animate-fade-in">

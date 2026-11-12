@@ -603,7 +603,7 @@ Sie ist additiv. Die bestehenden Policies gelten auch für die neue Spalte. Zuer
 
 > **Stand nach Rücksprache am 12.11.2026:** Der Nutzer klammert die Namensfrage für die **Jahrestabellen** aus. Dort sieht er in der Oberfläche keine doppelten Namen. Die **Ewige Tabelle** prüft er mit dir in einem eigenen nächsten Schritt: mögliche Duplikate „Klaudio Lange“ und „Benjamin Buza“. Schritt D und E werden erst nach dieser Prüfung und nach ausdrücklicher Freigabe begonnen. Bis dahin ist der folgende Text nur die Vorlage.
 
-**Branch:** `feat/player-identity-schema` (D1), danach je ein eigener PR für D2 (Daten füllen) und D3 (App, geteilt in D3a: Lesen/Schreiben der Referenzen, Übertragung und Statistik nach Referenz; D3b: Spielerauswahl in der Oberfläche, neue Abende mit stabiler ID). Stand 13.11.2026: D1 und D2 live, D3a in Arbeit.
+**Branch:** `feat/player-identity-schema` (D1), danach je ein eigener PR für D2 (Daten füllen) und D3 (App, geteilt in D3a: Lesen/Schreiben der Referenzen, Übertragung und Statistik nach Referenz; D3b: Spielerauswahl in der Oberfläche, neue Abende mit stabiler ID). Stand 13.11.2026: D1, D2 und D3a live, D3b (Spielerauswahl, neue Abende mit stabiler ID) als PR. Hinweis: `scripts/db-players-check.sql` Zeile „Spieler ohne jede Zeile“ kann ab D3b größer als 0 sein (ein Spieler wird beim Eintippen angelegt, auch wenn der Abend nie gespielt wird).
 
 ### 9.1 Problem
 

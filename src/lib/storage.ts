@@ -131,12 +131,32 @@ export async function loadPlayerRegistry(): Promise<PlayerRegistry> {
     if (missing(players.error)) return EMPTY_REGISTRY;
     throw players.error;
   }
+  // The tables and the player_ref columns come from the same migration: the list exists, so the columns do too
+  schemaFeatures.playerRef = true;
   const aliases = await supabase.from('player_aliases').select('alias, player_id').order('alias', { ascending: true });
   if (aliases.error) {
     if (missing(aliases.error)) return buildRegistry(players.data ?? [], []);
     throw aliases.error;
   }
   return buildRegistry(players.data ?? [], aliases.data ?? []);
+}
+
+/**
+ * Adds a person to the list of known players and returns it. If the same name (case and spaces ignored) was added
+ * in the meantime, for example on another device, that player is returned instead of a second one.
+ */
+export async function createPlayer(displayName: string): Promise<{ id: string; displayName: string }> {
+  const name = displayName.trim().replace(/\s+/g, ' ');
+  if (!name) throw new Error('Spielername fehlt');
+  const { data, error } = await supabase.from('players').insert({ display_name: name }).select('id, display_name').single();
+  if (!error && data) return { id: data.id, displayName: data.display_name };
+  if (error?.code === '23505') {
+    // unique spelling already taken: use that player
+    const registry = await loadPlayerRegistry();
+    const ref = registry.refByName.get(name.toLocaleLowerCase('de-DE'));
+    if (ref) return { id: ref, displayName: registry.names.get(ref) ?? name };
+  }
+  throw error ?? new Error('Spieler konnte nicht angelegt werden');
 }
 
 // ─── Leagues ───
