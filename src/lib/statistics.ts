@@ -1,11 +1,14 @@
-import { TrainingSession } from '@/types';
+import { Player, TrainingSession } from '@/types';
+import { EMPTY_REGISTRY, playerKey, PlayerRegistry } from './playerRegistry';
 import { winnerAndRunnerUp } from './ranking';
 import { rankSession } from './swissRanking';
 import { sortMatches } from './tables';
 import { getPlayoffFinalists, getSwissMatches, PLAYOFF_PLACEHOLDER_PREFIX, toPlayoffMatches } from './tournamentPhases';
 
 // Statistics are built from the matches of the finished evenings in the history.
-// Players get a new id on every evening, so a player is recognised by the name.
+// Players get a new id on every evening. A person is recognised by the fixed identity (Player.ref) when there is
+// one, otherwise by the name; a name that belongs to a known person (display name or alias in the registry, or a
+// name that carries the same identity elsewhere) counts as that person.
 
 export type GameResult = 'W' | 'D' | 'L';
 
@@ -88,8 +91,35 @@ export interface HeadToHead {
   meetings: Meeting[];
 }
 
-export function playerKey(name: string): string {
-  return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('de-DE');
+export { playerKey };
+
+/** The key under which a player is counted: the fixed identity if known, otherwise the name. */
+export type KeyOf = (player: Player) => string;
+
+const nameKeyOf: KeyOf = player => playerKey(player.name);
+
+/** Resolves players of the given evenings to the person they are, see above. */
+export function createKeyOf(sessions: TrainingSession[], registry: PlayerRegistry = EMPTY_REGISTRY): KeyOf {
+  // name -> identity; null when two different identities carry the same name (then the name decides nothing)
+  const refOfName = new Map<string, string | null>();
+  const note = (player: Player) => {
+    if (!player.ref) return;
+    const key = playerKey(player.name);
+    const known = refOfName.get(key);
+    refOfName.set(key, known === undefined || known === player.ref ? player.ref : null);
+  };
+  for (const session of sessions) {
+    session.players.forEach(note);
+    session.matches.forEach(m => {
+      note(m.homePlayer);
+      note(m.awayPlayer);
+    });
+  }
+  return player => {
+    const name = playerKey(player.name);
+    const ref = player.ref ?? registry.refByName.get(name) ?? refOfName.get(name) ?? undefined;
+    return ref ? `ref:${ref}` : name;
+  };
 }
 
 const eveningYear = (session: TrainingSession) => new Date(session.date).getFullYear();
@@ -105,7 +135,7 @@ const isRealPlayer = (player: { id: string; name: string } | undefined | null) =
   Boolean(player?.name) && !player!.id.startsWith(PLAYOFF_PLACEHOLDER_PREFIX) && player!.name !== '–';
 
 /** Played matches of an evening (group stage and playoff) in the order they were played. Byes are no games. */
-function gamesOf(session: TrainingSession): Game[] {
+function gamesOf(session: TrainingSession, keyOf: KeyOf = nameKeyOf): Game[] {
   return sortMatches(session.matches)
     .filter(
       m =>
@@ -119,8 +149,8 @@ function gamesOf(session: TrainingSession): Game[] {
     .map(m => ({
       date: session.date,
       eveningName: eveningLabel(session),
-      homeKey: playerKey(m.homePlayer.name),
-      awayKey: playerKey(m.awayPlayer.name),
+      homeKey: keyOf(m.homePlayer),
+      awayKey: keyOf(m.awayPlayer),
       homeName: m.homePlayer.name.trim(),
       awayName: m.awayPlayer.name.trim(),
       homeScore: m.homeScore as number,
@@ -157,28 +187,32 @@ export function availableYears(sessions: TrainingSession[]): number[] {
 const resultOf = (own: number, other: number): GameResult => (own > other ? 'W' : own < other ? 'L' : 'D');
 
 /** One record per player over the given evenings. */
-export function buildRecords(sessions: TrainingSession[], year?: number): PlayerRecord[] {
+export function buildRecords(sessions: TrainingSession[], year?: number, registry: PlayerRegistry = EMPTY_REGISTRY): PlayerRecord[] {
   const records = new Map<string, PlayerRecord>();
+  const keyOf = createKeyOf(sessions, registry);
+  /** Name shown for a person: the registry's display name, otherwise the latest spelling. */
+  const shownName = (key: string, spelling: string) =>
+    (key.startsWith('ref:') ? registry.names.get(key.slice(4)) : undefined) ?? spelling;
 
   const recordFor = (key: string, name: string): PlayerRecord => {
     let record = records.get(key);
     if (!record) {
       record = {
-        key, name, evenings: 0, games: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0,
+        key, name: shownName(key, name), evenings: 0, games: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0,
         goalDifference: 0, points: 0, avgPoints: 0, winRate: 0, titles: 0, form: [],
       };
       records.set(key, record);
     }
-    record.name = name; // evenings are processed oldest first, so the latest spelling wins
+    record.name = shownName(key, name); // evenings are processed oldest first, so the latest spelling wins
     return record;
   };
 
   for (const session of relevantEvenings(sessions, year)) {
-    const games = gamesOf(session);
+    const games = gamesOf(session, keyOf);
 
     // Everyone listed on the evening took part, plus anyone who has a played match
     const present = new Map<string, string>();
-    session.players.forEach(p => present.set(playerKey(p.name), p.name.trim()));
+    session.players.forEach(p => present.set(keyOf(p), p.name.trim()));
     games.forEach(g => {
       present.set(g.homeKey, g.homeName);
       present.set(g.awayKey, g.awayName);
@@ -214,7 +248,10 @@ export function buildRecords(sessions: TrainingSession[], year?: number): Player
 
     const winner = eveningWinner(session);
     if (winner) {
-      const record = records.get(playerKey(winner));
+      // The winner is given by name; find the player to count the title for the right person
+      const everyone = [...session.players, ...session.matches.flatMap(m => [m.homePlayer, m.awayPlayer])];
+      const player = everyone.find(p => p.name.trim() === winner.trim());
+      const record = records.get(player ? keyOf(player) : playerKey(winner));
       if (record) record.titles += 1;
     }
   }
@@ -228,14 +265,15 @@ export function buildRecords(sessions: TrainingSession[], year?: number): Player
   }));
 }
 
-export function buildOverview(sessions: TrainingSession[], year?: number): Overview {
+export function buildOverview(sessions: TrainingSession[], year?: number, registry: PlayerRegistry = EMPTY_REGISTRY): Overview {
+  const keyOf = createKeyOf(sessions, registry);
   const evenings = relevantEvenings(sessions, year);
   const players = new Set<string>();
   let games = 0;
   let goals = 0;
 
   for (const session of evenings) {
-    for (const game of gamesOf(session)) {
+    for (const game of gamesOf(session, keyOf)) {
       games += 1;
       goals += game.homeScore + game.awayScore;
       players.add(game.homeKey);
@@ -246,12 +284,19 @@ export function buildOverview(sessions: TrainingSession[], year?: number): Overv
 }
 
 /** All matches between two players, from the view of player A. */
-export function headToHead(sessions: TrainingSession[], keyA: string, keyB: string, year?: number): HeadToHead {
+export function headToHead(
+  sessions: TrainingSession[],
+  keyA: string,
+  keyB: string,
+  year?: number,
+  registry: PlayerRegistry = EMPTY_REGISTRY,
+): HeadToHead {
   const result: HeadToHead = { games: 0, winsA: 0, draws: 0, winsB: 0, goalsA: 0, goalsB: 0, meetings: [] };
   if (keyA === keyB) return result;
+  const keyOf = createKeyOf(sessions, registry);
 
   for (const session of relevantEvenings(sessions, year)) {
-    for (const game of gamesOf(session)) {
+    for (const game of gamesOf(session, keyOf)) {
       const aIsHome = game.homeKey === keyA && game.awayKey === keyB;
       const aIsAway = game.awayKey === keyA && game.homeKey === keyB;
       if (!aIsHome && !aIsAway) continue;

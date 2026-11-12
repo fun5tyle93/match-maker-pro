@@ -4,6 +4,7 @@ import { sortRows } from './ranking';
 import { TrainingSession, League, Player, Match, PlayerStats } from '@/types';
 import { SwissSession } from '@/types/swiss';
 import { PLAYOFF_PLACEHOLDER_PREFIX } from './tournamentPhases';
+import { buildRegistry, EMPTY_REGISTRY, PlayerRegistry } from './playerRegistry';
 import { sortMatches } from '@/lib/tables';
 
 // ─── Helper: Fetch all rows, paging past the PostgREST row limit (default 1000) ───
@@ -47,7 +48,7 @@ function toLeague(row: any, statsRows: any[]): League {
 
 function toPlayerStats(row: any): PlayerStats {
   return {
-    player: { id: row.player_id, name: row.player_name },
+    player: { id: row.player_id, name: row.player_name, ...refOf(row, 'player_ref') },
     wins: row.wins,
     draws: row.draws,
     losses: row.losses,
@@ -63,7 +64,14 @@ function toPlayerStats(row: any): PlayerStats {
 
 // Columns that were added later. They are only written once the database is known to have them (a row that
 // was read contained the column), so the app keeps working in front of a migration, for example in a preview.
-const schemaFeatures = { rankingRule: false, suddenDeath: false, swissState: false };
+const schemaFeatures = { rankingRule: false, suddenDeath: false, swissState: false, playerRef: false };
+
+/** The fixed identity of a stored row, if it has one; also notes that the database has the player_ref columns. */
+function refOf(row: Record<string, unknown>, column: string): { ref?: string } {
+  if (column in row) schemaFeatures.playerRef = true;
+  const value = row[column];
+  return typeof value === 'string' && value ? { ref: value } : {};
+}
 
 /** Ranking rule for a new evening: the DTKV rule once the database knows it, else the old one. */
 export function defaultRankingRule(): 'legacy' | 'dtkv2026' {
@@ -94,8 +102,8 @@ function toMatch(row: any): Match {
   return {
     id: row.id,
     round: row.round,
-    homePlayer: { id: row.home_player_id, name: row.home_player_name },
-    awayPlayer: { id: row.away_player_id, name: row.away_player_name },
+    homePlayer: { id: row.home_player_id, name: row.home_player_name, ...refOf(row, 'home_player_ref') },
+    awayPlayer: { id: row.away_player_id, name: row.away_player_name, ...refOf(row, 'away_player_ref') },
     homeScore: row.home_score,
     awayScore: row.away_score,
     isCompleted: row.is_completed,
@@ -106,6 +114,29 @@ function toMatch(row: any): Match {
     tableNumber: row.table_number ?? undefined,
     suddenDeath: row.sudden_death ?? false,
   };
+}
+
+// ─── Known players ───
+
+/**
+ * The known players and their aliases. Without the tables (database not migrated yet) the registry is empty and
+ * everything keeps working by name. Any other error is thrown.
+ */
+export async function loadPlayerRegistry(): Promise<PlayerRegistry> {
+  // 42P01 = table does not exist (Postgres), PGRST205 = table not in the schema cache (PostgREST); other errors are real
+  const missing = (error: { code?: string; message?: string }) =>
+    error.code === '42P01' || error.code === 'PGRST205' || /schema cache|does not exist/.test(error.message ?? '');
+  const players = await supabase.from('players').select('id, display_name').order('id', { ascending: true });
+  if (players.error) {
+    if (missing(players.error)) return EMPTY_REGISTRY;
+    throw players.error;
+  }
+  const aliases = await supabase.from('player_aliases').select('alias, player_id').order('alias', { ascending: true });
+  if (aliases.error) {
+    if (missing(aliases.error)) return buildRegistry(players.data ?? [], []);
+    throw aliases.error;
+  }
+  return buildRegistry(players.data ?? [], aliases.data ?? []);
 }
 
 // ─── Leagues ───
@@ -184,11 +215,9 @@ export async function saveLeague(league: League): Promise<void> {
     goal_difference: s.goalDifference,
     championships: s.championships ?? 0,
     vice_championships: s.viceChampionships ?? 0,
+    ...(schemaFeatures.playerRef && s.player.ref ? { player_ref: s.player.ref } : {}),
   }));
-  for (const part of chunk(rows, 500)) {
-    const { error } = await supabase.from('player_stats').upsert(part);
-    if (error) throw error;
-  }
+  await upsertRows('player_stats', rows);
 
   const wanted = new Set(league.playerStats.map(s => s.player.id));
   await deleteByIds('player_stats', existing.filter(r => !wanted.has(r.player_id)).map(r => r.id));
@@ -327,6 +356,7 @@ export async function loadHistory(): Promise<TrainingSession[]> {
       const players: Player[] = (playersBySession.get(row.id) ?? []).map(p => ({
         id: p.player_id,
         name: p.player_name,
+        ...refOf(p, 'player_ref'),
       }));
       const matches: Match[] = sortMatches((matchesBySession.get(row.id) ?? []).map(toMatch));
       return toSession(row, players, matches);
@@ -375,6 +405,25 @@ function chunk<T>(items: T[], size = ID_CHUNK): T[][] {
   const parts: T[][] = [];
   for (let i = 0; i < items.length; i += size) parts.push(items.slice(i, i + size));
   return parts;
+}
+
+/**
+ * Upserts rows whose keys differ (a reference is only written when it is known). Rows with the same keys go in one
+ * request: an upsert writes the columns of its rows, so a column that is left out stays as it is in the database.
+ * That is what keeps a stored reference when the app does not know it (for example an old browser tab).
+ */
+async function upsertRows(table: 'matches' | 'player_stats', rows: Record<string, unknown>[]): Promise<void> {
+  const bySignature = new Map<string, Record<string, unknown>[]>();
+  for (const row of rows) {
+    const signature = Object.keys(row).sort().join(',');
+    bySignature.set(signature, [...(bySignature.get(signature) ?? []), row]);
+  }
+  for (const group of bySignature.values()) {
+    for (const part of chunk(group, 500)) {
+      const { error } = await supabase.from(table).upsert(part as never);
+      if (error) throw error;
+    }
+  }
 }
 
 async function deleteByIds(table: 'matches' | 'training_players' | 'player_stats', ids: string[]): Promise<void> {
@@ -427,24 +476,38 @@ async function syncPlayers(session: TrainingSession): Promise<() => Promise<void
   const existing = await fetchAll(() =>
     supabase
       .from('training_players')
-      .select('id, player_id, player_name')
+      .select(schemaFeatures.playerRef ? 'id, player_id, player_name, player_ref' : 'id, player_id, player_name')
       .eq('session_id', session.id)
       .order('id', { ascending: true })
   );
-  const rowByPlayer = new Map<string, { id: string; player_name: string }>(existing.map(r => [r.player_id, r]));
+  const rowByPlayer = new Map<string, { id: string; player_name: string; player_ref?: string | null }>(
+    existing.map(r => [r.player_id, r]),
+  );
+  const withRef = (p: Player) => (schemaFeatures.playerRef && p.ref ? { player_ref: p.ref } : {});
 
   const added = session.players
     .filter(p => !rowByPlayer.has(p.id))
-    .map(p => ({ session_id: session.id, player_id: p.id, player_name: p.name }));
+    .map(p => ({ session_id: session.id, player_id: p.id, player_name: p.name, ...withRef(p) }));
   if (added.length > 0) {
-    const { error } = await supabase.from('training_players').insert(added);
-    if (error) throw error;
+    // One request per set of keys, so a row without a reference never writes an empty one
+    const withReferences = added.filter(r => 'player_ref' in r);
+    const without = added.filter(r => !('player_ref' in r));
+    for (const rows of [withReferences, without]) {
+      if (rows.length === 0) continue;
+      const { error } = await supabase.from('training_players').insert(rows);
+      if (error) throw error;
+    }
   }
 
   for (const p of session.players) {
     const row = rowByPlayer.get(p.id);
-    if (row && row.player_name !== p.name) {
-      const { error } = await supabase.from('training_players').update({ player_name: p.name }).eq('id', row.id);
+    if (!row) continue;
+    // Name changed, or the reference is known now but not stored yet (never replace a stored one with nothing)
+    const patch: { player_name?: string; player_ref?: string } = {};
+    if (row.player_name !== p.name) patch.player_name = p.name;
+    if (schemaFeatures.playerRef && p.ref && row.player_ref !== p.ref) patch.player_ref = p.ref;
+    if (Object.keys(patch).length > 0) {
+      const { error } = await supabase.from('training_players').update(patch).eq('id', row.id);
       if (error) throw error;
     }
   }
@@ -472,6 +535,8 @@ async function syncMatches(session: TrainingSession): Promise<() => Promise<void
     is_bye: m.isBye ?? false,
     table_number: m.tableNumber ?? null,
     ...(schemaFeatures.suddenDeath ? { sudden_death: m.suddenDeath ?? false } : {}),
+    ...(schemaFeatures.playerRef && m.homePlayer.ref && !m.homePlayer.id.startsWith(PLAYOFF_PLACEHOLDER_PREFIX) ? { home_player_ref: m.homePlayer.ref } : {}),
+    ...(schemaFeatures.playerRef && m.awayPlayer.ref && !m.awayPlayer.id.startsWith(PLAYOFF_PLACEHOLDER_PREFIX) ? { away_player_ref: m.awayPlayer.ref } : {}),
   }));
 
   // The lookup of existing rows runs alongside the write; nothing is removed in this function
@@ -479,12 +544,7 @@ async function syncMatches(session: TrainingSession): Promise<() => Promise<void
     fetchAll(() =>
       supabase.from('matches').select('id').eq('session_id', session.id).order('id', { ascending: true })
     ),
-    (async () => {
-      for (const part of chunk(rows, 500)) {
-        const { error } = await supabase.from('matches').upsert(part);
-        if (error) throw error;
-      }
-    })(),
+    upsertRows('matches', rows),
   ]);
 
   const wanted = new Set(session.matches.map(m => m.id));
@@ -509,7 +569,7 @@ async function loadSessionById(sessionId: string): Promise<TrainingSession | nul
     ),
   ]);
 
-  const players: Player[] = playerRows.map(p => ({ id: p.player_id, name: p.player_name }));
+  const players: Player[] = playerRows.map(p => ({ id: p.player_id, name: p.player_name, ...refOf(p, 'player_ref') }));
   const matches: Match[] = sortMatches(matchRows.map(toMatch));
 
   return toSession(row, players, matches);

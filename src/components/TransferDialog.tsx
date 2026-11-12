@@ -75,11 +75,11 @@ export function TransferDialog({
   const handleTransfer = () => {
     const chosen = leagues.filter(l => selectedLeagues.includes(l.id));
     const found = planTransferMatches(
-      stats.map(stat => stat.player.name),
+      stats.map(stat => ({ name: stat.player.name, ref: stat.player.ref })),
       chosen.map(l => ({
         id: l.id,
         name: l.name,
-        rows: l.playerStats.map(ps => ({ name: ps.player.name, points: ps.points, championships: ps.championships || 0 })),
+        rows: l.playerStats.map(ps => ({ name: ps.player.name, points: ps.points, championships: ps.championships || 0, ref: ps.player.ref })),
       })),
     );
 

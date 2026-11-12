@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatShortDate, GameResult, headToHead, PlayerRecord } from '@/lib/statistics';
+import { PlayerRegistry } from '@/lib/playerRegistry';
 import { pluralize } from '@/lib/plural';
 import { TrainingSession } from '@/types';
 import { cn } from '@/lib/utils';
@@ -19,10 +20,12 @@ interface HeadToHeadCardProps {
   /** Players that can be picked (at least one played match). */
   records: PlayerRecord[];
   year?: number;
+  /** Needed to resolve the same keys as the records */
+  registry?: PlayerRegistry;
 }
 
 /** Two players, all matches they played against each other. */
-export function HeadToHeadCard({ sessions, records, year }: HeadToHeadCardProps) {
+export function HeadToHeadCard({ sessions, records, year, registry }: HeadToHeadCardProps) {
   const players = useMemo(
     () => records.filter(r => r.games > 0).sort((a, b) => a.name.localeCompare(b.name, 'de')),
     [records],
@@ -38,8 +41,8 @@ export function HeadToHeadCard({ sessions, records, year }: HeadToHeadCardProps)
   const playerA = players.find(p => p.key === keyA);
   const playerB = players.find(p => p.key === keyB);
   const result = useMemo(
-    () => (keyA && keyB ? headToHead(sessions, keyA, keyB, year) : null),
-    [sessions, keyA, keyB, year],
+    () => (keyA && keyB ? headToHead(sessions, keyA, keyB, year, registry) : null),
+    [sessions, keyA, keyB, year, registry],
   );
 
   const swap = () => setPicked({ a: keyB, b: keyA });

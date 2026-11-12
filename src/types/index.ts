@@ -1,6 +1,11 @@
 export interface Player {
   id: string;
   name: string;
+  /**
+   * Fixed identity of the person (players.id). Unlike `id` it is the same on every evening and in every league.
+   * Missing for players that were typed in before the player list existed, or when it could not be written.
+   */
+  ref?: string;
   /** Whether the player already had a BYE (freilos) in the Swiss system */
   hasHadBye?: boolean;
 }

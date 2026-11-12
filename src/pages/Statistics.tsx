@@ -7,7 +7,8 @@ import { HeadToHeadCard } from '@/components/HeadToHeadCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { loadHistory } from '@/lib/storage';
+import { loadHistory, loadPlayerRegistry } from '@/lib/storage';
+import { EMPTY_REGISTRY, PlayerRegistry } from '@/lib/playerRegistry';
 import { pluralize } from '@/lib/plural';
 import {
   availableYears,
@@ -54,6 +55,7 @@ const column = (key: SortKey): Column => COLUMNS.find(c => c.key === key)!;
 
 const Statistics = () => {
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
+  const [registry, setRegistry] = useState<PlayerRegistry>(EMPTY_REGISTRY);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [yearValue, setYearValue] = useState(ALL_YEARS);
@@ -64,10 +66,16 @@ const Statistics = () => {
 
   useEffect(() => {
     let cancelled = false;
-    loadHistory()
-      .then(data => {
+    // The player list only improves the names and merges spellings of one person; without it the names decide
+    const registryLoaded = loadPlayerRegistry().catch(err => {
+      console.error('Failed to load the player list:', err);
+      return EMPTY_REGISTRY;
+    });
+    Promise.all([loadHistory(), registryLoaded])
+      .then(([data, players]) => {
         if (cancelled) return;
         setSessions(data);
+        setRegistry(players);
         setLoadError(false);
       })
       .catch(err => {
@@ -93,8 +101,8 @@ const Statistics = () => {
   // A year that no longer exists (for example after a reload of the data) falls back to all years
   const year = yearValue !== ALL_YEARS && years.includes(Number(yearValue)) ? Number(yearValue) : undefined;
 
-  const records = useMemo(() => buildRecords(sessions, year), [sessions, year]);
-  const overview = useMemo(() => buildOverview(sessions, year), [sessions, year]);
+  const records = useMemo(() => buildRecords(sessions, year, registry), [sessions, year, registry]);
+  const overview = useMemo(() => buildOverview(sessions, year, registry), [sessions, year, registry]);
   const sorted = useMemo(() => sortRecords(records, sort.key, sort.direction), [records, sort]);
 
   const toggleSort = (column: Column) =>
@@ -297,7 +305,7 @@ const Statistics = () => {
             </CardContent>
           </Card>
 
-          <HeadToHeadCard sessions={sessions} records={records} year={year} />
+          <HeadToHeadCard sessions={sessions} records={records} year={year} registry={registry} />
         </div>
       )}
     </>,

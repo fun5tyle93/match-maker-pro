@@ -109,6 +109,46 @@ describe('finding the player by name', () => {
   });
 });
 
+describe('finding the player by the fixed identity', () => {
+  const withRef = (name: string, ref: string | undefined, v: Partial<PlayerStats> = {}): PlayerStats => ({
+    ...stat(name, v), player: { id: `id-${name}`, name, ...(ref ? { ref } : {}) },
+  });
+  const one = (name: string, ref: string | undefined, points = 4, pointsAgainst = 2) => [withRef(name, ref, { points, pointsAgainst })];
+  const eternalBefore = league([withRef('Erik Schwarz', 'R-erik', { points: 100 }), withRef('Tim', 'R-tim', { points: 10 })], true);
+
+  it('books on the row of the same person although the name differs', () => {
+    const after = applySessionToLeague(eternalBefore, one('Erik', 'R-erik'), undefined, undefined, none);
+    expect(after.playerStats.length).toBe(2);
+    expect(row(after, 'Erik Schwarz').points).toBe(104);
+    expect(row(after, 'Erik Schwarz').player.name).toBe('Erik Schwarz'); // the league keeps its spelling
+  });
+
+  it('prefers the identity over a same name of another person', () => {
+    const l = league([withRef('Tim', 'R-tim1', { points: 100 }), withRef('Tim', 'R-tim2', { points: 10 })], true);
+    const after = applySessionToLeague(l, one('Tim', 'R-tim2'), undefined, undefined, none);
+    expect(after.playerStats.map(s => `${s.player.ref}:${s.points}`).sort()).toEqual(['R-tim1:100', 'R-tim2:14']);
+  });
+
+  it('adds a known person who is not in the league as a new row that keeps the identity', () => {
+    const after = applySessionToLeague(eternalBefore, one('Maxi Scheibitz', 'R-maxi'), undefined, undefined, none);
+    expect(after.playerStats.length).toBe(3);
+    expect(row(after, 'Maxi Scheibitz').player.ref).toBe('R-maxi');
+  });
+
+  it('gives a row that is found by name and has no identity the identity of the player', () => {
+    const l = league([withRef('Erik Schwarz', undefined, { points: 100 })], true);
+    const after = applySessionToLeague(l, one('erik schwarz', 'R-erik'), undefined, undefined, none);
+    expect(row(after, 'Erik Schwarz').player.ref).toBe('R-erik');
+    expect(row(after, 'Erik Schwarz').points).toBe(104);
+  });
+
+  it('never replaces the identity of a row with another one', () => {
+    const l = league([withRef('Erik Schwarz', 'R-erik', { points: 100 })], true);
+    const after = applySessionToLeague(l, one('Erik Schwarz', 'R-other'), undefined, undefined, new Map());
+    expect(row(after, 'Erik Schwarz').player.ref).toBe('R-erik');
+  });
+});
+
 describe('eternal table', () => {
   const eternal = league([
     stat('Anna', { wins: 36, draws: 12, losses: 36, goalsFor: 100, goalsAgainst: 90, points: 40, pointsAgainst: 20, championships: 5, viceChampionships: 3 }),

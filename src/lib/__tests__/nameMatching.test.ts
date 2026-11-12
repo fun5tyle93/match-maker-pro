@@ -122,7 +122,7 @@ describe('planTransferMatches', () => {
   const annual = { id: 'A', name: 'Tabelle 2026', rows: [row('Klaudio Lange', 75)] };
 
   it('asks nothing for names that exist, and matches spelling differences automatically', () => {
-    const plan = planTransferMatches(['klaudio lange', 'BENJAMIN  BUZA'], [eternal]);
+    const plan = planTransferMatches([{ name: 'klaudio lange' }, { name: 'BENJAMIN  BUZA' }], [eternal]);
     expect(plan.questions).toEqual([]);
     expect(plan.autoMatches).toEqual([
       { leagueId: 'E', eveningName: 'klaudio lange', leagueRowName: 'Klaudio Lange' },
@@ -131,30 +131,52 @@ describe('planTransferMatches', () => {
   });
 
   it('lists nothing for a name that is spelled exactly like the player in the league', () => {
-    const plan = planTransferMatches(['Klaudio Lange'], [eternal]);
+    const plan = planTransferMatches([{ name: 'Klaudio Lange' }], [eternal]);
     expect(plan.questions).toEqual([]);
     expect(plan.autoMatches).toEqual([]);
   });
 
   it('asks nothing for a name that is plainly new', () => {
-    expect(planTransferMatches(['Peter Pan'], [eternal]).questions).toEqual([]);
+    expect(planTransferMatches([{ name: 'Peter Pan' }], [eternal]).questions).toEqual([]);
   });
 
   it('asks per league, so the answer for one league never counts for another', () => {
-    const plan = planTransferMatches(['Klaudo Lange'], [eternal, annual]);
+    const plan = planTransferMatches([{ name: 'Klaudo Lange' }], [eternal, annual]);
     expect(plan.questions.map(q => q.leagueId)).toEqual(['E', 'A']);
     expect(plan.questions[0].candidates[0]).toMatchObject({ name: 'Klaudio Lange', points: 4379, championships: 85 });
   });
 
   it('asks once per name even when the evening lists it twice', () => {
-    expect(planTransferMatches(['Klaudo Lange', 'Klaudo Lange'], [eternal]).questions.length).toBe(1);
+    expect(planTransferMatches([{ name: 'Klaudo Lange' }, { name: 'Klaudo Lange' }], [eternal]).questions.length).toBe(1);
   });
 
   it('preselects typos as the same person and weaker hints as a new player', () => {
-    const [typo] = planTransferMatches(['Klaudo Lange'], [eternal]).questions;
+    const [typo] = planTransferMatches([{ name: 'Klaudo Lange' }], [eternal]).questions;
     expect(defaultAnswer(typo)).toBe('Klaudio Lange');
-    const [partial] = planTransferMatches(['Benjamin Buza a.K.'], [eternal]).questions;
+    const [partial] = planTransferMatches([{ name: 'Benjamin Buza a.K.' }], [eternal]).questions;
     expect(partial.candidates[0].kind).toBe('partial');
     expect(defaultAnswer(partial)).toBeNull();
+  });
+});
+
+describe('planTransferMatches with a fixed identity', () => {
+  const rows = [{ ...row('Erik Schwarz', 70, 5), ref: 'R-erik' }, { ...row('Maxi Scheibitz', 55), ref: 'R-maxi' }, row('Klaus Alt', 5)];
+  const league = { id: 'L', name: 'Liga', rows };
+
+  it('finds the player by the identity and asks nothing, whatever the name says', () => {
+    const plan = planTransferMatches([{ name: 'Erik', ref: 'R-erik' }], [league]);
+    expect(plan.questions).toEqual([]);
+    expect(plan.autoMatches).toEqual([{ leagueId: 'L', eveningName: 'Erik', leagueRowName: 'Erik Schwarz' }]);
+  });
+
+  it('does not ask for a known person who is not in the league yet, even with a similar name there', () => {
+    // "Maxi Scheibits" would be a typo candidate without identity; with an identity the person is simply new here
+    expect(planTransferMatches([{ name: 'Maxi Scheibits' }], [league]).questions.length).toBe(1);
+    expect(planTransferMatches([{ name: 'Maxi Scheibits', ref: 'R-other' }], [league]).questions).toEqual([]);
+  });
+
+  it('still matches a row without identity by name, and still asks for a player without identity', () => {
+    expect(planTransferMatches([{ name: 'klaus alt', ref: 'R-klaus' }], [league]).questions).toEqual([]);
+    expect(planTransferMatches([{ name: 'Erk Schwarz' }], [league]).questions.length).toBe(1);
   });
 });
