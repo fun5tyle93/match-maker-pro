@@ -417,6 +417,14 @@ Das `UPDATE` füllt nur die neue Spalte und ist deshalb erlaubt (Regel 4). **Ber
 
 **Branch:** `feat/swiss-rewrite`. Enthält eine additive Migration (7.6).
 
+> **Umsetzungsstand (Schritt B im Pull Request):** Auslosung in `src/lib/swissPairingEngine.ts` (`pairRound`, `maxSwissRounds`, `BYE_ID`, Fehlerklassen) und `src/lib/swissPairing.ts` (`generateSwissRoundMatches`, `generateRefereeRound`). Übertragung in `src/lib/leagueTransfer.ts`. Speichern in `src/lib/storage.ts` (`swissStateSupported`, `saveSwissSession`, `loadRunningSwissSession`, `discardSwissSession`) und `src/hooks/useSwissAutosave.ts`. Migration: `supabase/migrations/20261113100000_swiss_state.sql`. Tests: `swissPairingEngine.test.ts`, `leagueTransfer.test.ts`, `storageSwiss.test.ts`, `e2e/swiss-flow.mjs`.
+>
+> **Abweichungen vom Plan, bewusst:**
+> - **Abschluss:** Es bleibt bei der Reihenfolge des Trainings (erst Ligen, jede mit Vermerk in `transferredToLeagues`, dann der Abschluss). Jeder Schritt wird sofort in der Datenbank gespeichert, eine wiederholte Übertragung zählt nichts doppelt, und es geht nichts verloren. Der Abend wird nicht vor den Ligen als abgeschlossen gespeichert, weil er sonst bei einem Abbruch in der Historie stünde, ohne in den Ligen zu sein.
+> - **Zurücksetzen:** Es wird nichts gelöscht. Nur `swiss_state` wird geleert, Abend, Spieler und Spiele bleiben stehen.
+> - **„In Historie speichern“:** Der Knopf ist in diesem Modus ausgeblendet, weil er ein laufendes Turnier als abgeschlossen markieren würde. Ohne die Datenbankspalte bleibt er wie bisher.
+> - **Platzhalter im Playoff:** Leere Plätze und Freilose haben Platzhalter-IDs, die keine UUIDs sind. Beim Speichern werden sie in eine gültige, aus der Spiel-ID abgeleitete UUID mit dem Namen „–“ umgeschrieben (`storedPlayerId`).
+
 ### 7.1 Was heute kaputt ist (belegt, siehe Anhang)
 
 1. **Wiederholungsspiele:** `generateSwissRoundMatches` paart gierig von oben nach unten und weicht auf ein Wiederholungsspiel aus, wenn es nicht weiterkommt. In Simulationen kam es dadurch in 47 bis 80 % der Turniere zu einem **vermeidbaren** Wiederholungsspiel.

@@ -1,6 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { sortRows } from './ranking';
 import { TrainingSession, League, Player, Match, PlayerStats } from '@/types';
+import { SwissSession } from '@/types/swiss';
+import { PLAYOFF_PLACEHOLDER_PREFIX } from './tournamentPhases';
 import { sortMatches } from '@/lib/tables';
 
 // ─── Helper: Fetch all rows, paging past the PostgREST row limit (default 1000) ───
@@ -60,7 +63,7 @@ function toPlayerStats(row: any): PlayerStats {
 
 // Columns that were added later. They are only written once the database is known to have them (a row that
 // was read contained the column), so the app keeps working in front of a migration, for example in a preview.
-const schemaFeatures = { rankingRule: false, suddenDeath: false };
+const schemaFeatures = { rankingRule: false, suddenDeath: false, swissState: false };
 
 /** Ranking rule for a new evening: the DTKV rule once the database knows it, else the old one. */
 export function defaultRankingRule(): 'legacy' | 'dtkv2026' {
@@ -69,6 +72,7 @@ export function defaultRankingRule(): 'legacy' | 'dtkv2026' {
 
 function toSession(row: any, players: Player[], matches: Match[]): TrainingSession {
   if ('ranking_rule' in row) schemaFeatures.rankingRule = true;
+  if ('swiss_state' in row) schemaFeatures.swissState = true;
   return {
     id: row.id,
     name: row.name ?? undefined,
@@ -237,6 +241,63 @@ export function saveToHistory(session: TrainingSession): Promise<void> {
   return serialized(() => saveSessionToDB(session));
 }
 
+// ─── Running Swiss tournament ───
+
+let swissStateProbe: Promise<boolean> | null = null;
+
+/**
+ * Whether the database can hold a running Swiss tournament (column swiss_state). Without it the tournament stays
+ * in the browser, as before. Only a definite answer is remembered; a connection problem is thrown.
+ */
+export function swissStateSupported(): Promise<boolean> {
+  if (schemaFeatures.swissState) return Promise.resolve(true);
+  swissStateProbe ??= (async () => {
+    const { error } = await supabase.from('training_sessions').select('swiss_state').limit(1);
+    if (!error) {
+      schemaFeatures.swissState = true;
+      return true;
+    }
+    // 42703: column does not exist (Postgres); PGRST204/PGRST200-style messages come from PostgREST
+    if (error.code === '42703' || /swiss_state/.test(error.message ?? '')) return false;
+    throw error;
+  })().catch(err => {
+    swissStateProbe = null;
+    throw err;
+  });
+  return swissStateProbe;
+}
+
+/** Saves the running Swiss tournament: the tables (so history, statistics and exports work) and its full state. */
+export function saveSwissSession(asSession: TrainingSession, state: SwissSession): Promise<void> {
+  return serialized(() => saveSessionToDB(asSession, state));
+}
+
+/** The newest Swiss tournament that is still running, or null. Needs the swiss_state column. */
+export async function loadRunningSwissSession(): Promise<SwissSession | null> {
+  const { data, error } = await supabase
+    .from('training_sessions')
+    .select('*')
+    .eq('tournament_type', 'swiss')
+    .eq('is_completed', false)
+    .not('swiss_state', 'is', null)
+    .order('date', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const row = data?.[0];
+  return row?.swiss_state ? (row.swiss_state as unknown as SwissSession) : null;
+}
+
+/**
+ * Takes a Swiss tournament off the running slot ("reset"). Nothing is deleted: the evening, its players and
+ * matches stay in the database, only the running state is cleared.
+ */
+export function discardSwissSession(id: string): Promise<void> {
+  return serialized(async () => {
+    const { error } = await supabase.from('training_sessions').update({ swiss_state: null }).eq('id', id);
+    if (error) throw error;
+  });
+}
+
 export async function loadHistory(): Promise<TrainingSession[]> {
   try {
     const sessionRows = await fetchAll(() =>
@@ -328,7 +389,7 @@ async function deleteByIds(table: 'matches' | 'training_players' | 'player_stats
  * belong to the session are removed afterwards. A failure therefore never
  * leaves a session without its players or matches. Throws on any database error.
  */
-async function saveSessionToDB(session: TrainingSession): Promise<void> {
+async function saveSessionToDB(session: TrainingSession, swissState?: SwissSession): Promise<void> {
   const { error: sessError } = await supabase.from('training_sessions').upsert({
     id: session.id,
     name: session.name ?? null,
@@ -341,12 +402,24 @@ async function saveSessionToDB(session: TrainingSession): Promise<void> {
     ...(schemaFeatures.rankingRule
       ? { ranking_rule: session.rankingRule ?? 'legacy', decider_results: session.deciderResults ?? null }
       : {}),
+    // The running Swiss tournament; left out (not set to null) whenever it is not given, so saving a finished
+    // evening or a training evening never overwrites it
+    ...(schemaFeatures.swissState && swissState !== undefined ? { swiss_state: swissState as unknown as Json } : {}),
   });
   if (sessError) throw sessError;
 
   // Write everything first; the removal of rows that are gone only runs when all writes worked
   const removals = await Promise.all([syncPlayers(session), syncMatches(session)]);
   for (const remove of removals) await remove();
+}
+
+/**
+ * Id under which a player of a match is stored. An empty slot of the playoff bracket (TBD) or a bye has no player;
+ * the app marks it with a placeholder id that is not a valid uuid, but the column needs one. The stored placeholder
+ * keeps the name "–", which is how it is recognised when it is read back (see toPlayoffMatches).
+ */
+function storedPlayerId(player: Player, matchId: string, side: 'a' | 'b'): string {
+  return player.id.startsWith(PLAYOFF_PLACEHOLDER_PREFIX) ? matchId.slice(0, -1) + side : player.id;
 }
 
 /** Writes the players; returns the step that removes players that are no longer part of the session. */
@@ -386,9 +459,9 @@ async function syncMatches(session: TrainingSession): Promise<() => Promise<void
     id: m.id,
     session_id: session.id,
     round: m.round,
-    home_player_id: m.homePlayer.id,
+    home_player_id: storedPlayerId(m.homePlayer, m.id, 'a'),
     home_player_name: m.homePlayer.name,
-    away_player_id: m.awayPlayer.id,
+    away_player_id: storedPlayerId(m.awayPlayer, m.id, 'b'),
     away_player_name: m.awayPlayer.name,
     home_score: m.homeScore,
     away_score: m.awayScore,

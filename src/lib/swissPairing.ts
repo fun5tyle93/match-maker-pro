@@ -3,15 +3,16 @@ import {
   SwissPlayerStat, SwissRound, PlayoffMatch, PlayoffFormat, PlayoffStart,
 } from '@/types/swiss';
 import { headToHead } from './ranking';
+import { BYE_ID, maxSwissRounds, pairKey, pairRound, Rng, SwissPairingError } from './swissPairingEngine';
 
 function uuid() {
   return crypto.randomUUID();
 }
 
-function shuffle<T>(arr: T[]): T[] {
+function shuffle<T>(arr: T[], rng: Rng = Math.random): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -131,127 +132,144 @@ export function computeSwissStats(
 
 // ─── Swiss round pairing ───────────────────────────────────────────────────
 
+/** Pairs that were played in the group phase, and the byes (as pairs against BYE_ID). */
+function playedPairsOf(rounds: SwissRound[]): Set<string> {
+  const played = new Set<string>();
+  rounds.forEach(r => {
+    r.matches.forEach(m => played.add(pairKey(m.homePlayer.id, m.awayPlayer.id)));
+    if (r.byePlayerId) played.add(pairKey(r.byePlayerId, BYE_ID));
+  });
+  return played;
+}
+
+/** Player ids in ranking order for the next round: round 1 shuffled, later by the standings (ties shuffled). */
+function rankingFor(players: Player[], rounds: SwissRound[], targetRound: number, rng: Rng, lot?: Record<string, number>): string[] {
+  if (targetRound === 1) return shuffle(players, rng).map(p => p.id);
+  const stats = computeSwissStats(players, rounds, lot);
+  return shuffleWithinGroups(stats.map(s => s.player), stats, rng).map(p => p.id);
+}
+
+/** Draws a whole round (all matches plus the bye) with the pairing engine. Throws SwissPairingError if impossible. */
+function drawRound(
+  players: Player[],
+  rounds: SwissRound[],
+  targetRound: number,
+  totalRounds: number,
+  rng: Rng,
+  lot?: Record<string, number>,
+): { matches: Match[]; byePlayerId?: string } {
+  const ranking = rankingFor(players, rounds, targetRound, rng, lot);
+  const rank = new Map(ranking.map((id, i) => [id, i]));
+  const byId = new Map(players.map(p => [p.id, p]));
+  // More rounds than players can meet cannot be drawn; the tournament is shortened to what is possible
+  const plannedRounds = Math.min(totalRounds, maxSwissRounds(players.length));
+
+  const pairs = pairRound({
+    ranking,
+    played: playedPairsOf(rounds),
+    roundsAfter: Math.max(0, plannedRounds - targetRound),
+  });
+  if (!pairs) {
+    throw new SwissPairingError(
+      `Für Runde ${targetRound} ist keine Auslosung ohne Wiederholung möglich. Bitte die Rundenzahl prüfen.`,
+    );
+  }
+
+  let byePlayerId: string | undefined;
+  const matches: Match[] = [];
+  pairs.forEach(([a, b]) => {
+    if (a === BYE_ID || b === BYE_ID) {
+      byePlayerId = a === BYE_ID ? b : a;
+      return;
+    }
+    const { home, away } = assignSides(byId.get(a) as Player, byId.get(b) as Player, rounds, rng);
+    matches.push({
+      id: uuid(),
+      round: targetRound,
+      homePlayer: home,
+      awayPlayer: away,
+      homeScore: null,
+      awayScore: null,
+      isCompleted: false,
+    });
+  });
+  // Best-ranked pairing first
+  matches.sort((m, n) =>
+    Math.min(rank.get(m.homePlayer.id) as number, rank.get(m.awayPlayer.id) as number) -
+    Math.min(rank.get(n.homePlayer.id) as number, rank.get(n.awayPlayer.id) as number));
+  return { matches, byePlayerId };
+}
+
 /**
  * Generate pairings for the next Swiss round.
- * Round 1: random. Subsequent rounds: match players with similar points.
- * No player meets the same opponent twice.
- * Handles BYE for odd player counts (lowest-ranked who hasn't had one yet).
+ * Round 1: random. Later rounds: players of similar rank meet. In the group phase of a tournament no pair meets
+ * twice and nobody has a second bye; a round is only drawn when the rounds that are still planned stay drawable.
+ * Throws SwissPairingError when no such round exists.
  */
 export function generateSwissRoundMatches(
   players: Player[],
   rounds: SwissRound[],
-  targetRound: number
+  targetRound: number,
+  totalRounds: number,
+  rng: Rng = Math.random,
+  lot?: Record<string, number>,
 ): { matches: Match[]; byePlayerId?: string } {
-  const stats = computeSwissStats(players, rounds);
-
-  // Build set of already-played pairs
-  const playedPairs = new Set<string>();
-  rounds.flatMap(r => r.matches).forEach(m => {
-    const key = [m.homePlayer.id, m.awayPlayer.id].sort().join('|');
-    playedPairs.add(key);
-  });
-
-  // Determine BYE player if odd number
-  let byePlayerId: string | undefined;
-  let activePlayers: Player[];
-
-  if (players.length % 2 === 1) {
-    // Find lowest-ranked player who hasn't had a bye yet
-    const reversed = [...stats].reverse(); // worst first
-    const byeCandidate = reversed.find(s => !s.hasHadBye);
-    if (byeCandidate) {
-      byePlayerId = byeCandidate.player.id;
-    } else {
-      // All have had byes, pick the worst again
-      byePlayerId = reversed[0].player.id;
-    }
-    activePlayers = players.filter(p => p.id !== byePlayerId);
-  } else {
-    activePlayers = [...players];
-  }
-
-  let orderedPlayers: Player[];
-
-  if (targetRound === 1) {
-    orderedPlayers = shuffle(activePlayers);
-  } else {
-    // Order by standings, shuffle within same-point groups
-    const activeStats = stats.filter(s => s.player.id !== byePlayerId);
-    orderedPlayers = shuffleWithinGroups(
-      activeStats.map(s => s.player),
-      activeStats
-    );
-  }
-
-  const matches: Match[] = [];
-  const paired = new Set<string>();
-
-  // Greedy pairing: pair adjacent players not already matched
-  for (let i = 0; i < orderedPlayers.length; i++) {
-    const p1 = orderedPlayers[i];
-    if (paired.has(p1.id)) continue;
-
-    let paired2 = false;
-    for (let j = i + 1; j < orderedPlayers.length; j++) {
-      const p2 = orderedPlayers[j];
-      if (paired.has(p2.id)) continue;
-      const key = [p1.id, p2.id].sort().join('|');
-      if (playedPairs.has(key)) continue;
-
-      // Assign sides fairly
-      const { home, away } = assignSides(p1, p2, rounds);
-
-      matches.push({
-        id: uuid(),
-        round: targetRound,
-        homePlayer: home,
-        awayPlayer: away,
-        homeScore: null,
-        awayScore: null,
-        isCompleted: false,
-      });
-
-      paired.add(p1.id);
-      paired.add(p2.id);
-      paired2 = true;
-      break;
-    }
-
-    // Fallback: relax rematch constraint
-    if (!paired2) {
-      for (let j = i + 1; j < orderedPlayers.length; j++) {
-        const p2 = orderedPlayers[j];
-        if (paired.has(p2.id)) continue;
-
-        const { home, away } = assignSides(p1, p2, rounds);
-        matches.push({
-          id: uuid(),
-          round: targetRound,
-          homePlayer: home,
-          awayPlayer: away,
-          homeScore: null,
-          awayScore: null,
-          isCompleted: false,
-        });
-        paired.add(p1.id);
-        paired.add(p2.id);
-        break;
-      }
-    }
-  }
-
-  return { matches, byePlayerId };
+  return drawRound(players, rounds, targetRound, totalRounds, rng, lot);
 }
 
-function assignSides(p1: Player, p2: Player, rounds: SwissRound[]): { home: Player; away: Player } {
+// ─── Referee-mode round generation ────────────────────────────────────────
+
+/**
+ * Referee mode: the whole round is drawn like a normal round, then the matches are spread over two passes in a
+ * zigzag by rank (best match in pass 1, next in pass 2, ...). The referees of a pass are the players who play in the
+ * other pass, plus the player who has the bye (he does not play this round, so he can referee in both passes).
+ * The passes may differ by one match.
+ */
+export function generateRefereeRound(
+  players: Player[],
+  rounds: SwissRound[],
+  targetRound: number,
+  totalRounds: number,
+  rng: Rng = Math.random,
+  lot?: Record<string, number>,
+): { pass1: SwissRound; pass2: SwissRound; byePlayerId?: string } {
+  const { matches, byePlayerId } = drawRound(players, rounds, targetRound, totalRounds, rng, lot);
+
+  const matchesOf = (offset: 0 | 1) => matches.filter((_, i) => i % 2 === offset);
+  const playersOf = (ms: Match[]) => ms.flatMap(m => [m.homePlayer.id, m.awayPlayer.id]);
+  const matches1 = matchesOf(0);
+  const matches2 = matchesOf(1);
+  const withBye = (ids: string[]) => (byePlayerId ? [...ids, byePlayerId] : ids);
+
+  const pass1: SwissRound = {
+    roundNumber: targetRound,
+    phase: 'referee',
+    pass: 1,
+    matches: matches1,
+    referees: withBye(playersOf(matches2)),
+    isCompleted: false,
+    byePlayerId,
+  };
+  const pass2: SwissRound = {
+    roundNumber: targetRound,
+    phase: 'referee',
+    pass: 2,
+    matches: matches2,
+    referees: withBye(playersOf(matches1)),
+    isCompleted: false,
+  };
+  return { pass1, pass2, byePlayerId };
+}
+
+function assignSides(p1: Player, p2: Player, rounds: SwissRound[], rng: Rng): { home: Player; away: Player } {
   const p1w = countWhiteGames(p1.id, rounds);
   const p2w = countWhiteGames(p2.id, rounds);
   if (p1w < p2w) return { home: p1, away: p2 };
   if (p2w < p1w) return { home: p2, away: p1 };
-  return Math.random() < 0.5 ? { home: p1, away: p2 } : { home: p2, away: p1 };
+  return rng() < 0.5 ? { home: p1, away: p2 } : { home: p2, away: p1 };
 }
 
-function shuffleWithinGroups(players: Player[], stats: SwissPlayerStat[]): Player[] {
+function shuffleWithinGroups(players: Player[], stats: SwissPlayerStat[], rng: Rng): Player[] {
   const groups = new Map<number, Player[]>();
   stats.forEach(s => {
     const pts = s.points;
@@ -261,132 +279,12 @@ function shuffleWithinGroups(players: Player[], stats: SwissPlayerStat[]): Playe
   const result: Player[] = [];
   Array.from(groups.entries())
     .sort(([a], [b]) => b - a)
-    .forEach(([, group]) => result.push(...shuffle(group)));
+    .forEach(([, group]) => result.push(...shuffle(group, rng)));
   return result;
 }
 
 function countWhiteGames(playerId: string, rounds: SwissRound[]): number {
   return rounds.flatMap(r => r.matches).filter(m => m.homePlayer.id === playerId).length;
-}
-
-// ─── Referee-mode round generation ────────────────────────────────────────
-
-/**
- * Referee mode: zigzag assignment.
- * Pairings sorted by rank → alternating shifts: P1 shift1, P2 shift2, P3 shift1...
- * Players playing in shift 1 referee shift 2 and vice versa.
- * refereeCount tracker ensures fairness.
- */
-export function generateRefereeRound(
-  players: Player[],
-  rounds: SwissRound[],
-  targetRound: number
-): { pass1: SwissRound; pass2: SwissRound; byePlayerId?: string } {
-  const stats = computeSwissStats(players, rounds);
-
-  // Handle BYE if odd
-  let byePlayerId: string | undefined;
-  let activePlayers: Player[];
-
-  if (players.length % 2 === 1) {
-    const reversed = [...stats].reverse();
-    const byeCandidate = reversed.find(s => !s.hasHadBye);
-    byePlayerId = byeCandidate ? byeCandidate.player.id : reversed[0].player.id;
-    activePlayers = players.filter(p => p.id !== byePlayerId);
-  } else {
-    activePlayers = [...players];
-  }
-
-  const activeStats = stats.filter(s => activePlayers.some(p => p.id === s.player.id));
-
-  // Build played pairs
-  const playedPairs = new Set<string>();
-  rounds.flatMap(r => r.matches).forEach(m => {
-    playedPairs.add([m.homePlayer.id, m.awayPlayer.id].sort().join('|'));
-  });
-
-  // Create pairings by distributing ranks evenly across two passes
-  const orderedPlayers = activeStats.map(s => s.player);
-
-  const pass1Players: Player[] = [];
-  const pass2Players: Player[] = [];
-  // Distribute: index even -> pass1, odd -> pass2 (ensures P1->pass1, P2->pass2, P3->pass1...)
-  orderedPlayers.forEach((p, idx) => {
-    if (idx % 2 === 0) pass1Players.push(p);
-    else pass2Players.push(p);
-  });
-
-  const buildMatchesForPass = (plist: Player[]): { matches: Match[]; playersInPass: Player[] } => {
-    const res: Match[] = [];
-    const paired = new Set<string>();
-    for (let i = 0; i < plist.length; i++) {
-      const p1 = plist[i];
-      if (paired.has(p1.id)) continue;
-      // find nearest opponent in same pass not already paired and not played before
-      let found = false;
-      for (let j = i + 1; j < plist.length; j++) {
-        const p2 = plist[j];
-        if (paired.has(p2.id)) continue;
-        const key = [p1.id, p2.id].sort().join('|');
-        if (playedPairs.has(key)) continue; // never rematch
-        const { home, away } = assignSides(p1, p2, rounds);
-        res.push({ id: uuid(), round: targetRound, homePlayer: home, awayPlayer: away, homeScore: null, awayScore: null, isCompleted: false });
-        paired.add(p1.id);
-        paired.add(p2.id);
-        found = true;
-        break;
-      }
-      if (!found) {
-        // no partner inside pass without rematch -> attempt to pair across the other pass (swap)
-        // We'll try simple swap heuristics
-        for (let j = 0; j < pass1Players.length; j++) {
-          const q = pass1Players[j];
-          if (q.id === p1.id) continue;
-          if (paired.has(q.id)) continue;
-          // try pair p1 with q
-          const key = [p1.id, q.id].sort().join('|');
-          if (playedPairs.has(key)) continue;
-          const { home, away } = assignSides(p1, q, rounds);
-          res.push({ id: uuid(), round: targetRound, homePlayer: home, awayPlayer: away, homeScore: null, awayScore: null, isCompleted: false });
-          paired.add(p1.id);
-          paired.add(q.id);
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        // As last resort, try any unpaired in pass (even if it would be rematch) — but per requirement, we must NOT allow rematches.
-        throw new Error('Unable to create referee pass pairings without rematches');
-      }
-    }
-    return { matches: res, playersInPass: plist };
-  };
-
-  const pass1 = buildMatchesForPass(pass1Players);
-  const pass2 = buildMatchesForPass(pass2Players);
-
-  const toMatches = (pairs: Match[]) => pairs.map(p => ({ ...p }));
-
-  const round1: SwissRound = {
-    roundNumber: targetRound,
-    phase: 'referee',
-    pass: 1,
-    matches: toMatches(pass1.matches),
-    referees: pass1Players.map(p => p.id),
-    isCompleted: false,
-    byePlayerId,
-  };
-
-  const round2: SwissRound = {
-    roundNumber: targetRound,
-    phase: 'referee',
-    pass: 2,
-    matches: toMatches(pass2.matches),
-    referees: pass2Players.map(p => p.id),
-    isCompleted: false,
-  };
-
-  return { pass1: round1, pass2: round2, byePlayerId };
 }
 
 // ─── Playoff bracket generation ────────────────────────────────────────────

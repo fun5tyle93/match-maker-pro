@@ -10,13 +10,13 @@ describe('Swiss pairing', () => {
   it('does not create rematches across rounds', () => {
     const players = makePlayers(6);
     // Round 1
-    const { matches: r1 } = generateSwissRoundMatches(players, [], 1);
+    const { matches: r1 } = generateSwissRoundMatches(players, [], 1, 3);
     // mark matches as completed and add them to rounds array format expected by pairing
     const rounds = [
       { roundNumber: 1, phase: 'swiss', matches: r1.map(m => ({ ...m, homeScore: 2, awayScore: 1, isCompleted: true })), isCompleted: true },
     ];
 
-    const { matches: r2 } = generateSwissRoundMatches(players, rounds as any, 2);
+    const { matches: r2 } = generateSwissRoundMatches(players, rounds as any, 2, 3);
 
     const pairsR1 = new Set(r1.map(m => [m.homePlayer.id, m.awayPlayer.id].sort().join('|')));
     const pairsR2 = r2.map(m => [m.homePlayer.id, m.awayPlayer.id].sort().join('|'));
@@ -24,14 +24,16 @@ describe('Swiss pairing', () => {
     pairsR2.forEach(p => expect(pairsR1.has(p)).toBe(false));
   });
 
-  it('assigns BYE to a player who has not had a bye yet', () => {
+  it('gives the bye to a player who has not had one yet (byes are read from the rounds)', () => {
     const players = makePlayers(7);
-    // mark player p7 as already having had a bye
-    players[6].hasHadBye = true as any;
-
-    const { byePlayerId } = generateSwissRoundMatches(players as any, [], 1);
-    // bye should not be p7
-    expect(byePlayerId).not.toEqual('p7');
+    const { matches: r1, byePlayerId: firstBye } = generateSwissRoundMatches(players, [], 1, 5);
+    expect(firstBye).toBeDefined();
+    const rounds = [
+      { roundNumber: 1, phase: 'swiss', byePlayerId: firstBye, matches: r1.map(m => ({ ...m, homeScore: 2, awayScore: 1, isCompleted: true })), isCompleted: true },
+    ];
+    const { byePlayerId } = generateSwissRoundMatches(players, rounds as never, 2, 5);
+    expect(byePlayerId).toBeDefined();
+    expect(byePlayerId).not.toEqual(firstBye);
   });
 });
 
