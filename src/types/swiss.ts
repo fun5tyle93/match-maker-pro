@@ -56,6 +56,8 @@ export interface PlayoffMatch {
   awayScore: number | null;
   isCompleted: boolean;
   isBye?: boolean;
+  /** Durch Sudden Death entschieden (Spielordnung § 9 Abs. 2) */
+  suddenDeath?: boolean;
 }
 
 export interface SwissSession {
@@ -70,4 +72,6 @@ export interface SwissSession {
   playoffMatches?: PlayoffMatch[];
   playoffActive?: boolean;
   transferredToLeagues?: string[];
+  /** Einmal gezogenes Los je Spieler: letztes Kriterium bei völligem Gleichstand in der Rangliste (0..1) */
+  lot?: Record<string, number>;
 }

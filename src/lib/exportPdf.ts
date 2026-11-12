@@ -1,7 +1,9 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { League, Match, Player, TrainingSession } from '@/types';
-import { calculatePlayerStats } from './pairingGenerator';
+import { placesFor, sortRows } from './ranking';
+import { rankSession, sessionFinalRanking } from './swissRanking';
+import { formatPoints, OUT_IN_LABEL } from './finalRankingText';
 import { groupMatchesByRound, pausingPlayers } from './tables';
 import { getSwissMatches, toPlayoffMatches, playoffMatchWinner } from './tournamentPhases';
 import { getRoundName } from './swissPairing';
@@ -199,7 +201,8 @@ export function buildTrainingPdf(session: TrainingSession, logoBase64?: string):
   const groupMatches = getSwissMatches(session.matches);
   const playoffMatches = toPlayoffMatches(session.matches);
   const hasPlayoff = playoffMatches.length > 0;
-  const stats = calculatePlayerStats(session.players, groupMatches);
+  const ranked = rankSession(session);
+  const stats = ranked.stats;
   const matchesByRound = groupMatchesByRound(groupMatches);
   const summary = summarizeMatches(groupMatches);
 
@@ -216,7 +219,7 @@ export function buildTrainingPdf(session: TrainingSession, logoBase64?: string):
     startY: standingsTop,
     head: [['#', 'Spieler', 'Pkt', 'Tore', 'Diff']],
     body: stats.map((s, index) => [
-      index + 1,
+      ranked.places[index],
       s.player.name,
       `${s.points}:${s.pointsAgainst}`,
       `${s.goalsFor}:${s.goalsAgainst}`,
@@ -234,7 +237,7 @@ export function buildTrainingPdf(session: TrainingSession, logoBase64?: string):
     tableWidth: 'wrap',
     didParseCell: data => {
       if (data.section === 'body' && data.column.index === 0) {
-        const rank = data.row.index + 1;
+        const rank = ranked.places[data.row.index];
         if (rank <= 3) {
           data.cell.styles.textColor = getRankColorPDF(rank);
           data.cell.styles.fontStyle = 'bold';
@@ -323,7 +326,7 @@ export function buildTrainingPdf(session: TrainingSession, logoBase64?: string):
         getRoundName(m.round),
         m.matchNumber,
         m.homePlayer?.name ?? 'TBD',
-        m.isBye ? 'Freilos' : m.isCompleted ? `${m.homeScore}:${m.awayScore}` : '-:-',
+        m.isBye ? 'Freilos' : m.isCompleted ? `${m.homeScore}:${m.awayScore}${m.suddenDeath ? ' SD' : ''}` : '-:-',
         m.awayPlayer?.name ?? (m.isBye ? '' : 'TBD'),
         playoffMatchWinner(m)?.name ?? '',
       ]),
@@ -349,6 +352,58 @@ export function buildTrainingPdf(session: TrainingSession, logoBase64?: string):
       doc.text(`Turniersieger: ${champion.name}`, margin, playoffY);
       doc.setTextColor(...PDF_COLORS.text);
       doc.setFont('helvetica', 'normal');
+    }
+
+    // Final ranking of a Swiss tournament (SO § 9 Abs. 6): Swiss points plus playoff points, by round of elimination
+    const finalRows = sessionFinalRanking(session);
+    if (finalRows) {
+      if (playoffY + 30 > pageHeight - PDF_CONFIG.footerHeight - 2) {
+        doc.addPage();
+        playoffY = margin + 4;
+      } else {
+        playoffY += 8;
+      }
+      const rankingY = drawSectionHeader(doc, 'Abschlussrangliste', playoffY);
+      autoTable(doc, {
+        startY: rankingY,
+        head: [['#', 'Spieler', 'Ausgeschieden in', 'Punkte', 'davon Playoff', 'Diff']],
+        body: finalRows.map(r => [
+          r.place,
+          r.player.name,
+          OUT_IN_LABEL[r.outIn],
+          formatPoints(r.points),
+          formatPoints(r.playoffPoints),
+          formatGoalDiff(r.goalDifference),
+        ]),
+        ...getCompactTableStyles(),
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { halign: 'left', cellWidth: 52 },
+          2: { halign: 'left', cellWidth: 36 },
+          3: { halign: 'center', cellWidth: 20 },
+          4: { halign: 'center', cellWidth: 24 },
+          5: { halign: 'center', cellWidth: 14 },
+        },
+        margin: { left: margin, right: margin, bottom: PDF_CONFIG.footerHeight + 4 },
+        didParseCell: data => {
+          if (data.section === 'body' && data.column.index === 0) {
+            const rank = finalRows[data.row.index].place;
+            if (rank <= 3) {
+              data.cell.styles.textColor = getRankColorPDF(rank);
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        },
+      });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(PDF_CONFIG.fontSize.small);
+      doc.setTextColor(...PDF_COLORS.textMuted);
+      doc.text(
+        'Platzierung nach DTKV-Spielordnung § 9 Abs. 6: Punkte aus Vorrunde und Playoff, Sudden-Death-Sieg 1,5 / -Niederlage 0,5 Punkte.',
+        margin,
+        tableEnd(doc) + 5,
+      );
+      doc.setTextColor(...PDF_COLORS.text);
     }
   }
 
@@ -385,17 +440,20 @@ export function buildLeaguePdf(league: League, logoBase64?: string): jsPDF {
 
   // Column order matches the UI: #, Spieler, Spiele, Pkt, Tore, Diff, M, VM, ∅ Pkt/Spiel
   const currentY = drawSectionHeader(doc, 'Gesamttabelle', startY);
+  // Same order as in the app; rows that are level share a place
+  const leagueRows = sortRows(league.playerStats, !!league.isEternal);
+  const leaguePlaces = placesFor(leagueRows, !!league.isEternal);
 
   autoTable(doc, {
     startY: currentY,
     // "Ø" instead of "∅": the PDF standard font has no glyph for the empty-set sign
     head: [['#', 'Spieler', 'Spiele', 'Pkt', 'Tore', 'Diff', 'M', 'VM', 'Ø Pkt/Spiel']],
-    body: league.playerStats.map((s, index) => {
+    body: leagueRows.map((s, index) => {
       const totalPoints = s.points + s.pointsAgainst;
       const games = Math.floor(totalPoints / 2);
       const avgPoints = totalPoints > 0 ? ((s.points / totalPoints) * 2).toFixed(2) : '-';
       return [
-        index + 1,
+        leaguePlaces[index],
         s.player.name,
         games,
         `${s.points}:${s.pointsAgainst}`,
@@ -423,7 +481,7 @@ export function buildLeaguePdf(league: League, logoBase64?: string): jsPDF {
     margin: { left: margin, right: margin, bottom: PDF_CONFIG.footerHeight + 4 },
     didParseCell: data => {
       if (data.section === 'body' && data.column.index === 0) {
-        const rank = data.row.index + 1;
+        const rank = leaguePlaces[data.row.index];
         if (rank <= 3) {
           data.cell.styles.textColor = getRankColorPDF(rank);
           data.cell.styles.fontStyle = 'bold';

@@ -35,7 +35,9 @@ import {
 import { TrainingSession, Match } from '@/types';
 import { loadHistory, deleteFromHistory, saveToHistory } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
-import { calculatePlayerStats } from '@/lib/pairingGenerator';
+import { winnerAndRunnerUp } from '@/lib/ranking';
+import { rankSession, sessionFinalRanking } from '@/lib/swissRanking';
+import { FinalRankingTable } from '@/components/FinalRankingTable';
 import { groupMatchesByRound, pausingPlayers } from '@/lib/tables';
 import { pluralize } from '@/lib/plural';
 import { getSwissMatches, toPlayoffMatches, getPlayoffFinalists } from '@/lib/tournamentPhases';
@@ -178,11 +180,10 @@ const History = () => {
             {sessions.map((session) => {
               const swissMatches = getSwissMatches(session.matches);
               const playoffMatches = toPlayoffMatches(session.matches);
-              const stats = calculatePlayerStats(session.players, swissMatches);
               const champion = playoffMatches.length > 0
                 ? getPlayoffFinalists(playoffMatches).champion
                 : null;
-              const winner = champion?.name || stats[0]?.player.name || 'Unbekannt';
+              const winner = champion?.name || winnerAndRunnerUp(rankSession(session)).winner?.name || 'Unbekannt';
               
               return (
                 <Card key={session.id} className="animate-fade-in hover:shadow-glow transition-shadow">
@@ -366,10 +367,14 @@ const History = () => {
                   const swissMatches = getSwissMatches(selectedSession.matches);
                   const playoffMatches = toPlayoffMatches(selectedSession.matches);
                   const hasPlayoff = playoffMatches.length > 0;
+                  const finalRanking = sessionFinalRanking(selectedSession);
                   return (
                     <>
+                      {finalRanking && <FinalRankingTable rows={finalRanking} />}
                       <StandingsTable
-                        stats={calculatePlayerStats(selectedSession.players, swissMatches)}
+                        stats={rankSession(selectedSession).stats}
+                        places={rankSession(selectedSession).places}
+                        dtkvNote={selectedSession.tournamentType !== 'swiss' && selectedSession.rankingRule === 'dtkv2026'}
                         title={hasPlayoff ? 'Vorrunde – Endstand' : 'Endstand'}
                       />
 

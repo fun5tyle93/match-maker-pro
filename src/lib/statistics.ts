@@ -1,5 +1,6 @@
 import { TrainingSession } from '@/types';
-import { calculatePlayerStats } from './pairingGenerator';
+import { winnerAndRunnerUp } from './ranking';
+import { rankSession } from './swissRanking';
 import { sortMatches } from './tables';
 import { getPlayoffFinalists, getSwissMatches, PLAYOFF_PLACEHOLDER_PREFIX, toPlayoffMatches } from './tournamentPhases';
 
@@ -136,7 +137,8 @@ export function eveningWinner(session: TrainingSession): string | undefined {
   if (champion) return champion.name;
 
   if (!groupMatches.some(m => m.isCompleted)) return undefined;
-  return calculatePlayerStats(session.players, groupMatches)[0]?.player.name;
+  // The first place only counts when it is not shared (a tie at place 1 was decided before the evening was closed)
+  return winnerAndRunnerUp(rankSession(session)).winner?.name;
 }
 
 /** Evenings that count: at least one played match, optionally limited to one year, oldest first. */

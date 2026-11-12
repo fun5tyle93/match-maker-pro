@@ -1,4 +1,5 @@
 import { Player, Match, PlayerStats } from '@/types';
+import { rankPlayers, RankingRule, DeciderResult } from './ranking';
 
 // Larger than any balance cost, so a pairing only repeats a table when it cannot be avoided
 const REPEAT_PENALTY = 1000;
@@ -220,97 +221,19 @@ export function generatePairings(
   return { matches, roundCount: totalRounds };
 }
 
-// Calculate head-to-head result between two players
-function getHeadToHead(
-  playerA: Player,
-  playerB: Player,
-  matches: Match[]
-): number {
-  let pointsA = 0;
-  let pointsB = 0;
-
-  matches.filter(m => m.isCompleted).forEach(match => {
-    const isAHome = match.homePlayer.id === playerA.id && match.awayPlayer.id === playerB.id;
-    const isBHome = match.homePlayer.id === playerB.id && match.awayPlayer.id === playerA.id;
-
-    if (isAHome && match.homeScore !== null && match.awayScore !== null) {
-      if (match.homeScore > match.awayScore) pointsA += 2;
-      else if (match.homeScore < match.awayScore) pointsB += 2;
-      else { pointsA += 1; pointsB += 1; }
-    } else if (isBHome && match.homeScore !== null && match.awayScore !== null) {
-      if (match.homeScore > match.awayScore) pointsB += 2;
-      else if (match.homeScore < match.awayScore) pointsA += 2;
-      else { pointsA += 1; pointsB += 1; }
-    }
-  });
-
-  return pointsA - pointsB;
+/**
+ * Statistics of the players of a group, best first. `rule` selects the tie-break:
+ * 'legacy' (default, unchanged) or 'dtkv2026' (see src/lib/ranking.ts).
+ */
+export function calculatePlayerStats(
+  players: Player[],
+  matches: Match[],
+  rule: RankingRule = 'legacy',
+  deciders: DeciderResult[] = [],
+): PlayerStats[] {
+  return rankPlayers(players, matches, rule, deciders).stats;
 }
 
-export function calculatePlayerStats(players: Player[], matches: Match[]): PlayerStats[] {
-  const stats = players.map(player => ({
-    player,
-    wins: 0,
-    draws: 0,
-    losses: 0,
-    goalsFor: 0,
-    goalsAgainst: 0,
-    points: 0,
-    pointsAgainst: 0,
-    goalDifference: 0,
-    championships: 0,
-    viceChampionships: 0,
-  }));
-
-  matches.filter(m => m.isCompleted).forEach(match => {
-    const homeStats = stats.find(s => s.player.id === match.homePlayer.id);
-    const awayStats = stats.find(s => s.player.id === match.awayPlayer.id);
-
-    if (!homeStats || !awayStats || match.homeScore === null || match.awayScore === null) return;
-
-    homeStats.goalsFor += match.homeScore;
-    homeStats.goalsAgainst += match.awayScore;
-    awayStats.goalsFor += match.awayScore;
-    awayStats.goalsAgainst += match.homeScore;
-
-    if (match.homeScore > match.awayScore) {
-      homeStats.wins += 1;
-      awayStats.losses += 1;
-    } else if (match.homeScore < match.awayScore) {
-      awayStats.wins += 1;
-      homeStats.losses += 1;
-    } else {
-      homeStats.draws += 1;
-      awayStats.draws += 1;
-    }
-  });
-
-  // Calculate points and goal difference
-  stats.forEach(s => {
-    s.points = s.wins * 2 + s.draws * 1;
-    s.pointsAgainst = s.losses * 2 + s.draws * 1;
-    s.goalDifference = s.goalsFor - s.goalsAgainst;
-  });
-
-  // Sort by: points, goal difference, goals scored, goals against (fewer is better), head-to-head
-  stats.sort((a, b) => {
-    // 1. Points (highest first)
-    if (b.points !== a.points) return b.points - a.points;
-    // 2. Goal difference (best first)
-    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
-    // 3. Goals scored (most first)
-    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
-    // 4. Goals against (fewest first)
-    if (a.goalsAgainst !== b.goalsAgainst) return a.goalsAgainst - b.goalsAgainst;
-    // 5. Head-to-head comparison
-    const h2h = getHeadToHead(a.player, b.player, matches);
-    return -h2h; // Negative because we want higher points for a to come first
-  });
-
-  return stats;
-}
-
-// Calculate similarity between two strings (Levenshtein distance based)
 export function calculateSimilarity(str1: string, str2: string): number {
   const s1 = str1.toLowerCase().trim();
   const s2 = str2.toLowerCase().trim();

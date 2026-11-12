@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { sortRows } from './ranking';
 import { TrainingSession, League, Player, Match, PlayerStats } from '@/types';
 import { sortMatches } from '@/lib/tables';
 
@@ -57,7 +58,17 @@ function toPlayerStats(row: any): PlayerStats {
   };
 }
 
+// Columns that were added later. They are only written once the database is known to have them (a row that
+// was read contained the column), so the app keeps working in front of a migration, for example in a preview.
+const schemaFeatures = { rankingRule: false, suddenDeath: false };
+
+/** Ranking rule for a new evening: the DTKV rule once the database knows it, else the old one. */
+export function defaultRankingRule(): 'legacy' | 'dtkv2026' {
+  return schemaFeatures.rankingRule ? 'dtkv2026' : 'legacy';
+}
+
 function toSession(row: any, players: Player[], matches: Match[]): TrainingSession {
+  if ('ranking_rule' in row) schemaFeatures.rankingRule = true;
   return {
     id: row.id,
     name: row.name ?? undefined,
@@ -69,10 +80,13 @@ function toSession(row: any, players: Player[], matches: Match[]): TrainingSessi
     matchesPerPairing: row.matches_per_pairing,
     transferredToLeagues: row.transferred_to_leagues ?? [],
     tournamentType: (row.tournament_type ?? 'training') as 'training' | 'swiss',
+    rankingRule: row.ranking_rule === 'dtkv2026' ? 'dtkv2026' : 'legacy',
+    deciderResults: Array.isArray(row.decider_results) ? row.decider_results : undefined,
   };
 }
 
 function toMatch(row: any): Match {
+  if ('sudden_death' in row) schemaFeatures.suddenDeath = true;
   return {
     id: row.id,
     round: row.round,
@@ -86,6 +100,7 @@ function toMatch(row: any): Match {
     matchNumber: row.match_number ?? undefined,
     isBye: row.is_bye ?? false,
     tableNumber: row.table_number ?? undefined,
+    suddenDeath: row.sudden_death ?? false,
   };
 }
 
@@ -113,12 +128,12 @@ export async function loadLeagues(): Promise<League[]> {
     for (const s of statsRows) {
       statsByLeague.set(s.league_id, [...(statsByLeague.get(s.league_id) ?? []), s]);
     }
-    return leagueRows.map(row =>
-      toLeague(
-        row,
-        (statsByLeague.get(row.id) ?? []).sort((a, b) => b.points - a.points)
-      )
-    );
+    return leagueRows.map(row => {
+      const league = toLeague(row, statsByLeague.get(row.id) ?? []);
+      // Annual league: points, fewer points lost, goal difference, goals scored (SO § 2 Abs. 6);
+      // eternal table: points, championships. The sort is stable, so rows that are level keep their order.
+      return { ...league, playerStats: sortRows(league.playerStats, !!league.isEternal) };
+    });
   } catch (err) {
     console.error('Failed to load leagues:', err);
     throw err;
@@ -323,6 +338,9 @@ async function saveSessionToDB(session: TrainingSession): Promise<void> {
     matches_per_pairing: session.matchesPerPairing,
     transferred_to_leagues: session.transferredToLeagues ?? [],
     tournament_type: session.tournamentType ?? 'training',
+    ...(schemaFeatures.rankingRule
+      ? { ranking_rule: session.rankingRule ?? 'legacy', decider_results: session.deciderResults ?? null }
+      : {}),
   });
   if (sessError) throw sessError;
 
@@ -380,6 +398,7 @@ async function syncMatches(session: TrainingSession): Promise<() => Promise<void
     match_number: m.matchNumber ?? null,
     is_bye: m.isBye ?? false,
     table_number: m.tableNumber ?? null,
+    ...(schemaFeatures.suddenDeath ? { sudden_death: m.suddenDeath ?? false } : {}),
   }));
 
   // The lookup of existing rows runs alongside the write; nothing is removed in this function

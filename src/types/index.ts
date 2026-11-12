@@ -23,6 +23,8 @@ export interface Match {
   isBye?: boolean;
   /** Platte (1-basiert), auf der das Spiel gespielt wird */
   tableNumber?: number;
+  /** Playoff-Spiel durch Sudden Death entschieden (Spielordnung § 9 Abs. 2); zählt in der Abschlussrangliste 1,5 / 0,5 Punkte */
+  suddenDeath?: boolean;
 }
 
 export interface PlayerStats {
@@ -51,6 +53,13 @@ export interface TrainingSession {
   transferredToLeagues?: string[];
   /** 'training' = normales Training, 'swiss' = Schweizer System */
   tournamentType?: 'training' | 'swiss';
+  /**
+   * Wertungsregel, nach der der Abend gespielt wurde. Fehlt sie (alte Abende, Spalte noch nicht in der
+   * Datenbank), gilt 'legacy'. Neue Abende bekommen 'dtkv2026' (Spielordnung 2026 § 8 Abs. 3).
+   */
+  rankingRule?: 'legacy' | 'dtkv2026';
+  /** Ergebnisse von Entscheidungsspielen/-runden bei völligem Gleichstand um Platz 1 oder 2 */
+  deciderResults?: { players: string[]; order: string[] }[];
 }
 
 export interface League {

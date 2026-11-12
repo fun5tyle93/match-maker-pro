@@ -1,4 +1,5 @@
-import { saveToHistory } from '@/lib/storage';
+import { saveToHistory, defaultRankingRule } from '@/lib/storage';
+import { sessionFinalRanking } from '@/lib/swissRanking';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
 import { TrainingSession, PlayerStats, Match } from '@/types';
 import { SwissSession } from '@/types/swiss';
@@ -20,6 +21,7 @@ export function convertSwissToTrainingSession(s: SwissSession): TrainingSession 
     playoffRound: pm.round,
     matchNumber: pm.matchNumber,
     isBye: pm.isBye ?? false,
+    suddenDeath: pm.suddenDeath ?? false,
   }));
   const matches = [...swissMatches, ...playoffMatches];
   return {
@@ -33,6 +35,7 @@ export function convertSwissToTrainingSession(s: SwissSession): TrainingSession 
     matchesPerPairing: 1,
     transferredToLeagues: s.transferredToLeagues ?? [],
     tournamentType: 'swiss',
+    rankingRule: defaultRankingRule(),
   };
 }
 
@@ -46,7 +49,7 @@ export function computeFinalSwissStats(s: SwissSession): {
   championName?: string;
   viceChampionName?: string;
 } {
-  const swissStats = computeSwissStats(s.players, s.rounds);
+  const swissStats = computeSwissStats(s.players, s.rounds, s.lot);
 
   const acc = new Map<string, PlayerStats>();
   swissStats.forEach(st => {
@@ -119,16 +122,12 @@ export function computeFinalSwissStats(s: SwissSession): {
     }
   }
 
-  // Final ranking order (points, goal diff, goals for)
-  stats.sort((a, b) => {
-    if (a.player.name === championName) return -1;
-    if (b.player.name === championName) return 1;
-    if (a.player.name === viceChampionName) return -1;
-    if (b.player.name === viceChampionName) return 1;
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
-    return b.goalsFor - a.goalsFor;
-  });
+  // Final ranking order: by the round of elimination, then points, goal difference, opponent (SO § 9 Abs. 6);
+  // without a playoff the Swiss standings decide. The numbers in `stats` stay whole (win 2, loss 0) for the leagues.
+  const final = sessionFinalRanking(convertSwissToTrainingSession(s));
+  const order = (final ? final.map(r => r.player.id) : swissStats.map(st => st.player.id));
+  const position = (id: string) => { const i = order.indexOf(id); return i === -1 ? order.length : i; };
+  stats.sort((a, b) => position(a.player.id) - position(b.player.id));
 
   return { stats, championName, viceChampionName };
 }

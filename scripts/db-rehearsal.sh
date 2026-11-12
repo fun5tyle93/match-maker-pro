@@ -7,7 +7,8 @@
 # 2. legt die Supabase-Rollen/Funktionen an, die die Migrationen erwarten (anon, authenticated, auth.role())
 # 3. spielt alle Migrationen aus supabase/migrations/ der Reihe nach ein
 # 4. lädt die JSON-Dateien aus dem Backup (data/*.json)
-# 5. spielt die übergebenen zusätzlichen Migrationen ein (die neue, noch nicht live angewendete)
+# 5. spielt die übergebenen zusätzlichen Migrationen ein (die neue, noch nicht live angewendete); liegt eine davon schon
+#    in supabase/migrations/, wird sie in Schritt 3 übersprungen und erst hier, nach den Daten, angewendet
 # Danach: psql -h /var/tmp/mm-pg -p 54329 -U postgres   (Server stoppen: scripts/db-rehearsal.sh --stop)
 #
 # Berührt NICHT die Live-Datenbank. Bricht beim ersten Fehler ab.
@@ -40,7 +41,13 @@ CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(
 SQL
 chmod a+r "$SHIM"; run_sql "$SHIM"
 
-for f in "$ROOT"/supabase/migrations/*.sql; do cp "$f" "$DIR/m.sql"; chmod a+r "$DIR/m.sql"; run_sql "$DIR/m.sql"; echo "Migration: $(basename "$f")"; done
+# Migrations given as extra arguments are the ones under test: they are applied AFTER the backup data is loaded
+# (the backup was taken before them), even when the file already lies in supabase/migrations/.
+UNDER_TEST=" "; for f in "$@"; do UNDER_TEST="$UNDER_TEST$(basename "$f") "; done
+for f in "$ROOT"/supabase/migrations/*.sql; do
+  case "$UNDER_TEST" in *" $(basename "$f") "*) continue;; esac
+  cp "$f" "$DIR/m.sql"; chmod a+r "$DIR/m.sql"; run_sql "$DIR/m.sql"; echo "Migration: $(basename "$f")"
+done
 
 # Backup laden (Reihenfolge wegen Fremdschlüsseln)
 as_pg "$PSQL -c 'DELETE FROM public.current_session'"

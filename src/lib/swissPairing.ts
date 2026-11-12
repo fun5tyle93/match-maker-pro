@@ -2,6 +2,7 @@ import { Player, Match } from '@/types';
 import {
   SwissPlayerStat, SwissRound, PlayoffMatch, PlayoffFormat, PlayoffStart,
 } from '@/types/swiss';
+import { headToHead } from './ranking';
 
 function uuid() {
   return crypto.randomUUID();
@@ -18,9 +19,15 @@ function shuffle<T>(arr: T[]): T[] {
 
 // ─── Stats computation ─────────────────────────────────────────────────────
 
+/**
+ * Standings of the Swiss phase. Order (club rule, see docs/UMSETZUNGSPLAN.md 6.6): points per game,
+ * Buchholz, goal difference, goals scored, direct comparison, then the lot (drawn once per player and stored
+ * with the tournament, so the order does not change when the page is reloaded).
+ */
 export function computeSwissStats(
   players: Player[],
-  rounds: SwissRound[]
+  rounds: SwissRound[],
+  lot?: Record<string, number>
 ): SwissPlayerStat[] {
   const statsMap = new Map<string, SwissPlayerStat>();
 
@@ -106,7 +113,17 @@ export function computeSwissStats(
     // 2. Buchholz (desc)
     if (Math.abs(b.buchholz - a.buchholz) > 0.0001) return b.buchholz - a.buchholz;
     // 3. Goal difference (desc)
-    return b.goalDifference - a.goalDifference;
+    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+    // 4. Goals scored (desc)
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    // 5. Direct comparison, if the two played each other
+    const direct = headToHead(b.player.id, a.player.id, completedMatches);
+    if (direct !== 0) return direct;
+    // 6. The lot
+    const lotA = lot?.[a.player.id];
+    const lotB = lot?.[b.player.id];
+    if (lotA !== undefined && lotB !== undefined && lotA !== lotB) return lotA - lotB;
+    return 0;
   });
 
   return list;

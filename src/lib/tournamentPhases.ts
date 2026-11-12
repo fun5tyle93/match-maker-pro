@@ -35,12 +35,31 @@ export function toPlayoffMatches(matches: Match[]): PlayoffMatch[] {
       awayScore: m.awayScore,
       isCompleted: m.isCompleted,
       isBye: m.isBye ?? false,
+      suddenDeath: m.suddenDeath ?? false,
     }))
     .sort((a, b) => b.round - a.round || a.matchNumber - b.matchNumber);
 }
 
 export function hasPlayoff(session: TrainingSession): boolean {
   return getPlayoffFlatMatches(session.matches).length > 0;
+}
+
+/**
+ * Checks a result entered for a knock-out game (playoff, decider). A knock-out game has no draw (SO § 9 Abs. 1 and 2):
+ * it goes on with sudden death until a goal falls, so a sudden-death game is won by exactly one goal.
+ * Returns the message to show, or null when the result is fine.
+ */
+export function playoffResultError(homeScore: number, awayScore: number, suddenDeath: boolean): string | null {
+  if (!Number.isInteger(homeScore) || !Number.isInteger(awayScore) || homeScore < 0 || awayScore < 0) {
+    return 'Bitte gültige Tore eintragen.';
+  }
+  if (homeScore === awayScore) {
+    return 'Im K.-o.-Spiel gibt es kein Unentschieden. Bitte das Endergebnis inklusive Sudden-Death-Tor eintragen.';
+  }
+  if (suddenDeath && Math.abs(homeScore - awayScore) !== 1) {
+    return 'Bei Sudden Death gewinnt der Sieger mit genau einem Tor Vorsprung.';
+  }
+  return null;
 }
 
 /** Winner of a single playoff match (null if not decided) */

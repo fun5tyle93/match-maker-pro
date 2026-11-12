@@ -184,6 +184,8 @@ Das ist eine lauffähige Referenz von SO § 8 Abs. 3 (Fälle 1 bis 6 aus 6.1) un
 
 **Branch:** `feat/dtkv-ranking`. Enthält eine additive Migration (6.9).
 
+> **Umsetzungsstand (Schritt A am 12.11.2026 gemerged, Schritt W im Pull Request):** Die Wertung steckt in `src/lib/ranking.ts` (Abend, Liga, Ewige Tabelle, Abschlussrangliste) und `src/lib/swissRanking.ts` (`rankSession`, `sessionFinalRanking`). Die Migration liegt als `supabase/migrations/20261112200000_ranking_rule.sql` im PR und ist erst nach Zustimmung des Nutzers live angewendet. Tests: `ranking.test.ts`, `swissRanking.test.ts`, `storageSchema.test.ts`, `e2e/dtkv-ranking.mjs`.
+
 **Quellen:** DTKV-Spielordnung, Stand 24. März 2026 („SO“), und DTKV-Spielregeln 2025. Der Nutzer hat beide Dokumente bereitgestellt. Maßgeblich sind:
 - **SO § 8 Abs. 2:** Punkteverteilung im Turnier. Sieg 2:0, Unentschieden 1:1, Niederlage 0:2. Das entspricht dem heutigen Code.
 - **SO § 8 Abs. 3:** Punktgleichheit innerhalb einer Gruppe.

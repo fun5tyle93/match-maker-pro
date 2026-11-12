@@ -13,6 +13,7 @@ node e2e/complete-evening.mjs http://127.0.0.1:4173
 | `complete-evening.mjs` | Abschluss eines Abends mit Übertragung in 1 oder 2 Ligen (`LEAGUES=1`): danach `is_completed = true` | **zustandsbehafteter Mock** (Upsert, PATCH, DELETE, Filter `eq`/`in`) – Vorlage für alle Speichertests |
 | `save-failure.mjs` | Verbindungsausfall beim Speichern, Browser-Sicherung, Neuladen, Erholung, Zuschauer schreiben nie | Mock, der Schreibzugriffe gezielt scheitern lässt |
 | `pause-e2e.mjs <url> <ausgabeordner>` | Namen passen auf schmale Bildschirme (320 bis 1100 px), PDF- und Excel-Export | Messung im Browser (`evaluate`), Downloads |
+| `dtkv-ranking.mjs <url> <ausgabeordner> [backup-data]` | DTKV-Wertung: Entscheidungsdialog bei Gleichstand, Verhalten vor der Migration, Playoff ohne Unentschieden mit Sudden Death, Abschlussrangliste (Turnier, Historie, PDF, Excel), mit Backup-Daten: Sieger der Altabende wie vorher | zustandsbehafteter Mock mit `order`-Unterstützung |
 | `csp-e2e.mjs` | alle Seiten und Exporte laufen unter der echten CSP aus `vercel.json` | eigener kleiner Server mit den Headern aus `vercel.json`; startet ohne Argument (Port 4180) |
 
 Gemeinsame Bausteine:

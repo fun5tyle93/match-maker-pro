@@ -20,7 +20,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { generatePairings, calculatePlayerStats } from '@/lib/pairingGenerator';
+import { generatePairings } from '@/lib/pairingGenerator';
+import { compareEternalRows, compareLeagueRows, pendingDeciders, rankPlayers, winnerAndRunnerUp, DeciderResult } from '@/lib/ranking';
+import { DeciderDialog, DeciderGroup } from '@/components/DeciderDialog';
 import { groupMatchesByRound, pausingPlayers } from '@/lib/tables';
 import { PauseNotice } from '@/components/PauseNotice';
 import { pluralize } from '@/lib/plural';
@@ -32,6 +34,7 @@ import {
   loadLeagues,
   saveLeague,
   saveToHistory,
+  defaultRankingRule,
 } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +45,7 @@ const Training = () => {
   const [session, setSession] = useState<TrainingSession | null>(null);
   const [matchesPerPairing, setMatchesPerPairing] = useState(1);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [deciderGroups, setDeciderGroups] = useState<DeciderGroup[] | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [expandedRounds, setExpandedRounds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +124,7 @@ const Training = () => {
       isCompleted: false,
       roundCount,
       matchesPerPairing,
+      rankingRule: defaultRankingRule(),
     };
 
     setSession(newSession);
@@ -164,16 +169,35 @@ const Training = () => {
       return;
     }
 
+    // A complete tie at place 1 or 2 needs a decider first (DTKV rule only; the old rule never has ties)
+    const ranked = rankPlayers(session.players, session.matches, session.rankingRule ?? 'legacy', session.deciderResults ?? []);
+    const pending = pendingDeciders(ranked);
+    if (pending.length > 0) {
+      setDeciderGroups(pending);
+      return;
+    }
+    setShowTransferDialog(true);
+  };
+
+  const handleDeciderConfirm = (results: DeciderResult[]) => {
+    if (!session) return;
+    const kept = (session.deciderResults ?? []).filter(old =>
+      !results.some(r => r.players.length === old.players.length && r.players.every(id => old.players.includes(id))));
+    setSession({ ...session, deciderResults: [...kept, ...results] });
+    setDeciderGroups(null);
     setShowTransferDialog(true);
   };
 
   const handleTransferResults = async (leagueIds: string[], nameMatches: Map<string, string>) => {
     if (!session) return;
 
-    const stats = calculatePlayerStats(session.players, session.matches);
-    
-    const firstPlace = stats[0]?.player.name;
-    const secondPlace = stats[1]?.player.name;
+    const ranked = rankPlayers(session.players, session.matches, session.rankingRule ?? 'legacy', session.deciderResults ?? []);
+    const stats = ranked.stats;
+
+    // Winner and runner-up only when their place is not shared (a tie at place 1 or 2 was decided before)
+    const { winner, runnerUp } = winnerAndRunnerUp(ranked);
+    const firstPlace = winner?.name;
+    const secondPlace = runnerUp?.name;
     
     // Leagues that already received this evening (an earlier attempt stopped halfway) are skipped
     const alreadyDone = session.transferredToLeagues ?? [];
@@ -216,10 +240,7 @@ const Training = () => {
           }
         });
 
-        updatedStats.sort((a, b) => {
-          if (b.points !== a.points) return b.points - a.points;
-          return (b.championships ?? 0) - (a.championships ?? 0);
-        });
+        updatedStats.sort(compareEternalRows);
       } else {
         // Normal league: full stats transfer
         stats.forEach(stat => {
@@ -254,11 +275,7 @@ const Training = () => {
           }
         });
 
-        updatedStats.sort((a, b) => {
-          if (b.points !== a.points) return b.points - a.points;
-          if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
-          return b.goalsFor - a.goalsFor;
-        });
+        updatedStats.sort(compareLeagueRows);
       }
 
       return { ...league, playerStats: updatedStats };
@@ -357,7 +374,10 @@ const Training = () => {
     );
   };
 
-  const stats = session ? calculatePlayerStats(session.players, session.matches) : [];
+  const ranked = session
+    ? rankPlayers(session.players, session.matches, session.rankingRule ?? 'legacy', session.deciderResults ?? [])
+    : null;
+  const stats = ranked?.stats ?? [];
   const matchesByRound = session ? groupMatchesByRound(session.matches) : {};
 
   const allMatchesComplete = session?.matches.every(m => m.isCompleted) ?? false;
@@ -561,11 +581,18 @@ const Training = () => {
 
             {/* Standings Column */}
             <div className="lg:sticky lg:top-24 lg:self-start">
-              <StandingsTable stats={stats} title="Aktuelle Tabelle" />
+              <StandingsTable stats={stats} places={ranked?.places} dtkvNote={session?.rankingRule === 'dtkv2026'} title="Aktuelle Tabelle" />
             </div>
           </div>
         )}
       </main>
+
+      <DeciderDialog
+        open={deciderGroups !== null}
+        groups={deciderGroups ?? []}
+        onConfirm={handleDeciderConfirm}
+        onCancel={() => setDeciderGroups(null)}
+      />
 
       <TransferDialog
         open={showTransferDialog}

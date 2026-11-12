@@ -8,6 +8,7 @@ Meisterschaftstool des **TKC71 Hirschlanden** für Tipp-Kick: Trainingsabende mi
 
 - **Training:** Spieler erfassen, Paarungen und Platten (Tische) automatisch zuweisen, Ergebnisse eintragen, Tabelle live aktualisieren, Playoffs spielen.
 - **Ligen:** Trainingsabende in eine oder mehrere Gesamttabellen übertragen.
+- **Wertung:** Abende nach der DTKV-Spielordnung 2026 (§ 8 Abs. 3: direkter Vergleich bzw. Untergruppe vor den Toren). Abende, die vorher gespielt wurden, behalten ihre damalige Wertung. Im Schweizer System gilt für die Abschlussrangliste § 9 Abs. 6 (Punkte aus Vorrunde und Playoff, Sudden-Death-Sieg 1,5 / Niederlage 0,5).
 - **Statistiken:** Rangliste, Formkurve, Direktvergleiche u. a. (nur abgeschlossene Abende).
 - **Historie:** abgeschlossene Abende ansehen, bearbeiten, als PDF/Excel exportieren oder drucken.
 - **Speichern:** Automatisches Speichern mit Statusanzeige; bei Verbindungsproblemen bleibt eine lokale Sicherung im Browser erhalten.
