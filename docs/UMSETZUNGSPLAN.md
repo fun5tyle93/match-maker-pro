@@ -297,48 +297,58 @@ Die Kriterien 4 bis 6 sind neu. Diese Rangliste bestimmt die Auslosung (Schritt 
   - **Gespeichert:** in `PlayoffMatch.suddenDeath` (im `swiss_state`) und in der neuen Spalte `matches.sudden_death` (6.9).
   - **Gebraucht für:** die Abschlussrangliste (6.8).
 
-### 6.8 Abschlussrangliste im Schweizer System: SO § 9 Abs. 6 (verbindlich, vom Nutzer gewünscht)
+### 6.8 Abschlussrangliste im Schweizer System: SO § 9 Abs. 6 (verbindlich, vom Nutzer präzisiert)
 
 Wortlaut der Regel: „Alle ausgeschiedenen Spieler einer Play-Off-Runde werden nach den folgenden Kriterien für die Gesamtwertung eingeordnet:
 1. Anzahl der erspielten Punkte
 2. Tordifferenz aus allen Spielen
 3. die bessere Endplatzierung des Gegners
 
-Die Punkte aller Spiele werden addiert: Sieg ohne Sudden Death 2, Sieg nach Sudden Death 1,5, Niederlage nach Sudden Death 0,5, Niederlage ohne Sudden Death 0. Man beginnt bei den Ausgeschiedenen des Halbfinales, danach sind die ersten vier eindeutig platziert; dann die des Viertelfinales, danach die ersten 8, es folgen die des Achtelfinales usw.“
+[Punkte im Playoff:] Sieg ohne Sudden Death 2, Sieg nach Sudden Death 1,5, Niederlage nach Sudden Death 0,5, Niederlage ohne Sudden Death 0. Man beginnt bei den Ausgeschiedenen des Halbfinales, danach sind die ersten vier eindeutig platziert; dann die des Viertelfinales, danach die ersten 8, es folgen die des Achtelfinales usw.“
 
-**Algorithmus** (Referenz: `finalRankingSwiss` in `scripts/dtkv-ranking-reference.mjs`):
+**Festlegung des Nutzers (12.11.2026):** Die Punkte der Abschlussrangliste sind die **Gesamtpunkte der Vorrunde plus die Punkte aus dem Playoff**, zusammengezählt. Die halben Punkte sind nur die Zählformel für Playoff-Spiele, die durch Sudden Death entschieden wurden. Mit ihnen lassen sich die Plätze bestimmen. Entsprechend gilt für die Tordifferenz „aus allen Spielen“: Vorrunde plus Playoff. **Im Verein gibt es pro Playoff-Paarung immer genau ein Spiel.** Die Best-of-Varianten aus § 9 Abs. 5 werden also nicht gebraucht.
+
+**Algorithmus** (Referenz: `finalRankingSwiss` in `scripts/dtkv-ranking-reference.mjs`, importierbar):
 1. **Plätze 1 und 2:** Platz 1 ist der Sieger des Finales, Platz 2 der Verlierer.
-2. **Ausgeschiedene je Runde:** Danach Runde für Runde rückwärts (Halbfinale, Viertelfinale, Achtelfinale) die Verlierer dieser Runde, sortiert nach
-   1. **Playoff-Punkten** aus allen ihren Playoff-Spielen (2 / 1,5 / 0,5 / 0). Ein Playoff-Freilos zählt als kein Spiel und gibt 0 Punkte.
-   2. **Tordifferenz** aus allen ihren Playoff-Spielen.
-   3. **Endplatzierung des Gegners**, gegen den sie ausgeschieden sind. Wer gegen den besser Platzierten verloren hat, steht vorn. Der Gegner ist immer schon platziert, weil rückwärts gearbeitet wird. Dieses Kriterium entscheidet immer, denn jeder Spieler einer Runde scheidet gegen einen anderen Gegner aus.
-3. **Nicht qualifizierte Spieler:** Wer sich nicht fürs Playoff qualifiziert hat, folgt in der Reihenfolge der Swiss-Rangliste (6.6). Das ist analog zu SO § 8 Abs. 8, wo bei Gruppen zuerst die Platzierung in der Gruppe entscheidet, und als Vereinsregel ergänzt.
+2. **Ausgeschiedene je Runde:** Danach Runde für Runde rückwärts (Halbfinale, Viertelfinale, Achtelfinale) die Verlierer dieser Runde. Ein Halbfinal-Verlierer steht also immer vor einem Viertelfinal-Verlierer. Sortiert wird innerhalb der Runde nach
+   1. **Punkten:** Gesamtpunkte der Vorrunde (2 / 1 / 0 je Spiel, ein Vorrunden-Freilos gibt 0) **plus** Playoff-Punkte (2 / 1,5 / 0,5 / 0 je Spiel; ein Playoff-Freilos zählt als kein Spiel und gibt 0)
+   2. **Tordifferenz:** aus allen Spielen, also Vorrunde plus Playoff
+   3. **Endplatzierung des Gegners,** gegen den sie ausgeschieden sind. Wer gegen den besser Platzierten verloren hat, steht vorn. Der Gegner ist immer schon platziert, weil rückwärts gearbeitet wird. Dieses Kriterium entscheidet immer, denn jeder Spieler einer Runde scheidet gegen einen anderen Gegner aus.
+3. **Nicht qualifizierte Spieler:** Wer sich nicht fürs Playoff qualifiziert hat, folgt in der Reihenfolge der Swiss-Rangliste (6.6). Das ist analog zu SO § 8 Abs. 8 und als Vereinsregel ergänzt.
 4. **Ohne Playoff** (`endMode = 'direct'`): Die Abschlussrangliste ist die Swiss-Rangliste (6.6).
-
-**Auslegung:** Mit „alle Spiele“ sind die **Playoff-Spiele** gemeint. Dafür spricht, dass die Punkteverteilung der Regel nur Sieg und Niederlage kennt (im K.-o.-Spiel gibt es kein Unentschieden). Außerdem geht es um die Einordnung der Ausgeschiedenen einer Play-Off-Runde. Vorrundenpunkte zählen hier also nicht. Das wird so im Code kommentiert.
 
 **Grenzen der Regel:**
 - **Liga-Übertragung bleibt ganzzahlig:** Die halben Punkte gelten nur für die Abschlussrangliste. In die Jahrestabellen und die Ewige Tabelle gehen Playoff-Spiele weiter mit 2 / 0 Punkten ein, wie heute in `computeFinalSwissStats`. Meister und Vize kommen weiter aus dem Finale.
-- **Heutiger Fehler:** `computeFinalSwissStats` setzt bisher nur Sieger und Finalverlierer nach vorn und sortiert alle anderen nach Gesamtpunkten. Ein Achtelfinal-Verlierer mit vielen Vorrundenpunkten kann so vor einem Halbfinalisten stehen. Diese Sortierung wird durch den Algorithmus oben ersetzt.
+- **Heutiger Fehler:** `computeFinalSwissStats` setzt bisher nur Sieger und Finalverlierer nach vorn und sortiert alle anderen nach Gesamtpunkten, ohne die Ausscheiderunde zu beachten. Ein Achtelfinal-Verlierer kann so vor einem Halbfinalisten stehen. Diese Sortierung wird durch den Algorithmus oben ersetzt.
 
 **Anzeige:**
-- **Turnier:** Nach dem Finale erscheint in `SchweizSystem.tsx` die Tabelle „Abschlussrangliste“ mit den Spalten Platz, Spieler, „ausgeschieden in“ (Finale, Halbfinale, Viertelfinale, Achtelfinale, Vorrunde), Playoff-Punkte (mit Komma, zum Beispiel „2,5“) und Playoff-Tordifferenz. Darunter steht ein Hinweis: „Platzierung nach DTKV-Spielordnung § 9 Abs. 6 (Sudden-Death-Sieg 1,5 / -Niederlage 0,5 Punkte)“.
-- **Historie:** Die Details eines Swiss-Abends mit Playoff zeigen dieselbe Abschlussrangliste. Sie wird aus den gespeicherten Spielen berechnet (`phase = 'playoff'`, `playoff_round`, `sudden_death`).
+- **Turnier:** Nach dem Finale erscheint in `SchweizSystem.tsx` die Tabelle „Abschlussrangliste“ mit den Spalten:
+  - Platz
+  - Spieler
+  - „ausgeschieden in“ (Finale, Halbfinale, Viertelfinale, Achtelfinale, Vorrunde)
+  - Punkte gesamt, mit Komma bei halben Punkten (zum Beispiel „12,5“), dahinter in Klammern „davon Playoff“
+  - Tordifferenz gesamt
+
+  Darunter steht ein Hinweis: „Platzierung nach DTKV-Spielordnung § 9 Abs. 6: Punkte aus Vorrunde und Playoff, Sudden-Death-Sieg 1,5 / -Niederlage 0,5 Punkte“.
+- **Historie:** Die Details eines Swiss-Abends mit Playoff zeigen dieselbe Abschlussrangliste. Sie wird aus den gespeicherten Spielen berechnet (`phase`, `playoff_round`, `sudden_death`). Vorrundenpunkte und -tore kommen aus den Spielen mit `phase = 'swiss'`.
 - **Exporte:** PDF und Excel eines Swiss-Abends mit Playoff bekommen die Abschlussrangliste als eigene Tabelle bzw. als eigenes Blatt „Abschlussrangliste“.
 
 **Pflicht-Testfall** (Fall 7 im Referenzskript): Playoff ab dem Viertelfinale mit 8 von 12 Spielern.
-- **Spiele:**
+- **Vorrunde** (Punkte / Tordifferenz):
+  - P1 10/+12, P2 9/+8, P3 9/+5, P4 8/+6
+  - P5 8/+3, P6 7/+2, P7 7/+1, P8 7/−2
+  - P9 5/0, P10 4/−3, P11 3/−6, P12 2/−9
+- **Playoff:**
   - VF P1-P8 2:1, P4-P5 2:3 (Sudden Death), P2-P7 4:0, P3-P6 1:2
   - HF P1-P5 1:2, P2-P6 2:1 (Sudden Death)
   - Finale P5-P2 0:3
-- **Erwartet:** P2 > P5 > P6 > P1 > P4 > P3 > P8 > P7 > P9 > P10 > P11 > P12.
+- **Erwartet:** P2 > P5 > P1 > P6 > P3 > P4 > P7 > P8 > P9 > P10 > P11 > P12.
 - **Begründung:**
-  - P6 hat 2 + 0,5 = 2,5 Punkte, P1 nur 2.
-  - Unter den Viertelfinal-Verlierern hat P4 als einziger 0,5 Punkte.
-  - P3 und P8 haben beide 0 Punkte und −1 Tore. P3 hat gegen den Dritten verloren, P8 gegen den Vierten, also steht P3 vorn.
-  - P9 bis P12 folgen in der Reihenfolge der Swiss-Rangliste.
+  - Halbfinale: P1 hat 10 + 2 = 12 Punkte, P6 hat 7 + 2 + 0,5 = 9,5.
+  - Viertelfinale: P3 hat 9, P4 hat 8 + 0,5 = 8,5. P7 und P8 haben beide 7 Punkte und −3 Tore. P7 hat gegen den Ersten verloren, P8 gegen den Dritten, also steht P7 vorn.
+  - Gegenprobe: Mit der falschen Auslegung „nur Playoff-Punkte“ ergibt sich eine andere Reihenfolge (P6 vor P1). Der Test erkennt diesen Fehler also.
 
-Zusätzlich sind Tests nötig für Playoffs ab dem Achtelfinale und ab dem Halbfinale, für Playoffs mit Freilos und für das progressive Format, bei dem die besten vier direkt im Viertelfinale stehen.
+Zusätzlich sind Tests nötig für Playoffs ab dem Achtelfinale und ab dem Halbfinale, für Playoffs mit Freilos und für das progressive Format, bei dem die besten vier direkt im Viertelfinale stehen. Für zufällige Turniere muss die TypeScript-Umsetzung dieselbe Reihenfolge liefern wie `finalRankingSwiss` aus dem Referenzskript.
 
 ### 6.9 Migration für Schritt W
 
@@ -753,7 +763,8 @@ Sie wird per `supabase.rpc('complete_session', …)` aufgerufen und ersetzt die 
 
 - **Wertung bei Gleichstand:** nach DTKV-Spielordnung 2026, siehe Schritt W. Für den Abend gilt § 8 Abs. 3, für die Jahrestabelle analog § 2 Abs. 6.
 - **Freilos im Schiedsrichter-Modus:** Der Spieler mit Freilos ist in beiden Durchgängen der Runde Schiedsrichter (R8).
-- **Halbe Punkte nach Sudden Death:** werden umgesetzt, für die Abschlussrangliste im Schweizer System nach SO § 9 Abs. 6 (6.7, 6.8). Die Liga-Übertragung bleibt ganzzahlig.
+- **Halbe Punkte nach Sudden Death:** werden umgesetzt, für die Abschlussrangliste im Schweizer System nach SO § 9 Abs. 6 (6.7, 6.8). Die Punkte sind Vorrunde plus Playoff, die halben Punkte sind nur die Zählformel für Sudden-Death-Spiele. Die Liga-Übertragung bleibt ganzzahlig.
+- **Playoff:** Pro Paarung gibt es immer genau ein Spiel, keine Best-of-Varianten.
 - **Namen in den Jahrestabellen:** ausgeklammert. Die Ewige Tabelle wird im nächsten Schritt gemeinsam geprüft (Schritt D, Hinweis oben).
 
 ### Ergänzte Regeln (vom Nutzer am 12.11.2026 bestätigt)

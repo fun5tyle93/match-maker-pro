@@ -15,6 +15,7 @@
 //  - A complete tie after that stays a tie (Entscheidungsspiel/-runde needed, § 8 Abs. 3 Sätze 11-15).
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { pathToFileURL } from 'url';
 
 /** matches: [{ home, away, hs, as }] (completed games only). Returns blocks: [[id], [id, id] (tie), ...] best first. */
 export function rankGroup(playerIds, matches) {
@@ -64,15 +65,20 @@ export function rankOld(playerIds, matches) {
 
 // Final ranking of a Swiss tournament with playoff, Spielordnung 2026 § 9 Absatz 6.
 // playoff: [{ round, home, away, hs, as, sd, bye }]  round: 1 = final, 2 = semi-final, 3 = quarter-final, 4 = round of 16
-//          sd = decided by sudden death; bye = playoff Freilos (home advances, no game)
-// swissOrder: player ids in Swiss ranking order (6.6). Returns all player ids, place 1 first.
-export function finalRankingSwiss(playoff, swissOrder) {
+//          sd = decided by sudden death; bye = playoff Freilos (home advances, no game). One game per pairing.
+// swissOrder: player ids in Swiss ranking order (6.6).
+// vorrunde: Map id -> { points, gd }  total points (2/1/0) and goal difference of the Swiss phase.
+// Points for the ranking = Swiss-phase total points + playoff points (win 2, win after sudden death 1.5,
+// loss after sudden death 0.5, loss 0); goal difference = Swiss phase + playoff ("aus allen Spielen").
+// Players are placed by the round they were eliminated in, last round first. Returns all ids, place 1 first.
+export function finalRankingSwiss(playoff, swissOrder, vorrunde) {
   const winner = m => (m.bye ? m.home : m.hs > m.as ? m.home : m.away);
   const loser = m => (m.bye ? null : m.hs > m.as ? m.away : m.home);
-  // Playoff points per game: win 2, win after sudden death 1.5, loss after sudden death 0.5, loss 0
   const games = id => playoff.filter(m => !m.bye && (m.home === id || m.away === id));
-  const pts = id => games(id).reduce((sum, m) => sum + (winner(m) === id ? (m.sd ? 1.5 : 2) : (m.sd ? 0.5 : 0)), 0);
-  const diff = id => games(id).reduce((sum, m) => sum + (m.home === id ? m.hs - m.as : m.as - m.hs), 0);
+  const playoffPts = id => games(id).reduce((sum, m) => sum + (winner(m) === id ? (m.sd ? 1.5 : 2) : (m.sd ? 0.5 : 0)), 0);
+  const playoffGd = id => games(id).reduce((sum, m) => sum + (m.home === id ? m.hs - m.as : m.as - m.hs), 0);
+  const pts = id => (vorrunde.get(id)?.points ?? 0) + playoffPts(id);
+  const gd = id => (vorrunde.get(id)?.gd ?? 0) + playoffGd(id);
   const order = [];
   const place = new Map();
   const add = id => { order.push(id); place.set(id, order.length); };
@@ -81,16 +87,16 @@ export function finalRankingSwiss(playoff, swissOrder) {
   const rounds = [...new Set(playoff.map(m => m.round))].filter(r => r > 1).sort((a, b) => a - b);
   for (const r of rounds) {
     const out = playoff.filter(m => m.round === r && !m.bye).map(m => ({ id: loser(m), by: winner(m) }));
-    out.sort((a, b) => (pts(b.id) - pts(a.id)) || (diff(b.id) - diff(a.id)) || (place.get(a.by) - place.get(b.by)));
+    out.sort((a, b) => (pts(b.id) - pts(a.id)) || (gd(b.id) - gd(a.id)) || (place.get(a.by) - place.get(b.by)));
     out.forEach(o => add(o.id));
   }
   swissOrder.filter(id => !place.has(id)).forEach(add);   // not qualified for the playoff: Swiss ranking
   return order;
 }
-
 const show = blocks => blocks.map(b => b.join('=')).join(' > ');
 const g = (home, away, hs, as) => ({ home, away, hs, as });
 
+function main() {
 if (process.argv.length <= 2) {
   const cases = [
     { name: '1 Zwei punktgleich, direkter Vergleich schlägt bessere Tordifferenz',
@@ -123,6 +129,10 @@ if (process.argv.length <= 2) {
   // § 9 Abs. 6: quarter-final playoff of 8, 12 players in the Swiss phase (P1 = best of the Swiss ranking)
   {
     const P = n => 'P' + n;
+    // Swiss phase: total points and goal difference
+    const vr = new Map([[P(1), [10, 12]], [P(2), [9, 8]], [P(3), [9, 5]], [P(4), [8, 6]], [P(5), [8, 3]], [P(6), [7, 2]],
+      [P(7), [7, 1]], [P(8), [7, -2]], [P(9), [5, 0]], [P(10), [4, -3]], [P(11), [3, -6]], [P(12), [2, -9]]]
+      .map(([id, [points, gd]]) => [id, { points, gd }]));
     const po = [
       { round: 3, home: P(1), away: P(8), hs: 2, as: 1 },
       { round: 3, home: P(4), away: P(5), hs: 2, as: 3, sd: true },   // 2:2, P5 scores the sudden-death goal
@@ -132,13 +142,15 @@ if (process.argv.length <= 2) {
       { round: 2, home: P(2), away: P(6), hs: 2, as: 1, sd: true },   // 1:1, P2 scores the sudden-death goal
       { round: 1, home: P(5), away: P(2), hs: 0, as: 3 },
     ];
-    const got = finalRankingSwiss(po, Array.from({ length: 12 }, (_, i) => P(i + 1))).join(' > ');
-    // 1 P2, 2 P5; semi-final losers: P6 2.5 points (2 + 0.5) before P1 2 points;
-    // quarter-final losers: P4 0.5 first; P3 and P8 both 0 points and -1 -> P3 lost to P6 (place 3), P8 to P1 (place 4) -> P3 first; P7 0 / -4 last;
-    // places 9-12 from the Swiss ranking
-    const expect = 'P2 > P5 > P6 > P1 > P4 > P3 > P8 > P7 > P9 > P10 > P11 > P12';
+    const got = finalRankingSwiss(po, Array.from({ length: 12 }, (_, i) => P(i + 1)), vr).join(' > ');
+    // 1 P2, 2 P5.
+    // Semi-final losers: P1 10 + 2 = 12 before P6 7 + 2 + 0.5 = 9.5 (with playoff points only, P6 would be ahead).
+    // Quarter-final losers: P3 9 + 0 = 9, P4 8 + 0.5 = 8.5, then P7 7 + 0 = 7 / gd 1 - 4 = -3 and P8 7 + 0 = 7 / gd -2 - 1 = -3:
+    //   level -> P7 lost to P2 (place 1), P8 to P1 (place 3) -> P7 before P8.
+    // Places 9-12 from the Swiss ranking.
+    const expect = 'P2 > P5 > P1 > P6 > P3 > P4 > P7 > P8 > P9 > P10 > P11 > P12';
     const ok = got === expect; if (!ok) fails++;
-    console.log(`${ok ? 'OK  ' : 'FAIL'} 7 Abschlussrangliste Schweizer System (§ 9 Abs. 6, halbe Punkte nach Sudden Death): ${got}${ok ? '' : ` (erwartet ${expect})`}`);
+    console.log(`${ok ? 'OK  ' : 'FAIL'} 7 Abschlussrangliste Schweizer System (§ 9 Abs. 6: Vorrunde + Playoff, halbe Punkte nach Sudden Death): ${got}${ok ? '' : ` (erwartet ${expect})`}`);
   }
   process.exit(fails ? 1 : 0);
 }
@@ -170,3 +182,7 @@ for (const s of sessions.filter(x => x.is_completed).sort((a, b) => a.date.local
   if (tie12) console.log(`${s.date.slice(0, 10)} ${s.name ?? '-'}: GLEICHSTAND um Platz 1/2 nach DTKV`);
 }
 console.log(`\n${n} abgeschlossene Abende geprüft: ${differ} mit anderer Reihenfolge, davon Sieger anders: ${top1}, Vize anders: ${top2}; Abende mit verbleibendem Gleichstand: ${ties}`);
+}
+
+// Run only when called directly (the functions above can be imported, e.g. from tests)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
