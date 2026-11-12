@@ -417,7 +417,7 @@ export default function Dokumentation() {
               <PreviewShell
                 title="Spieler hinzufügen & entfernen"
                 description="Über das Eingabefeld können neue Spieler für einen Trainingsabend erfasst werden. Per Klick auf ✕ wird ein Spieler entfernt. Änderungen triggern einen Toast als visuelles Feedback."
-                hint="Gib einen Namen ein und drücke ＋ um einen Spieler hinzuzufügen."
+                hint="Gib einen Namen ein und drücke ＋ um einen Spieler hinzuzufügen. Im echten Training schlägt das Feld Spieler aus der Spielerliste vor; ein unbekannter Name fragt vor dem Anlegen nach (mit Hinweis auf ähnliche Namen)."
                 codeSnippet={`<PlayerInput
   players={players}
   onAddPlayer={(name) => addPlayer(name)}

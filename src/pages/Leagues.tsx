@@ -36,11 +36,14 @@ import { loadLeagues, saveLeague, deleteLeague } from '@/lib/storage';
 import { compareLeagueRows, placesFor } from '@/lib/ranking';
 import { findNameCandidates, sameName } from '@/lib/nameMatching';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlayerRegistry } from '@/hooks/usePlayerRegistry';
+import { PlayerNameField, PickedPlayer } from '@/components/PlayerNameField';
 import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportActions';
 import { cn } from '@/lib/utils';
 
 const Leagues = () => {
   const { isAdmin } = useAuth();
+  const { registry, addPlayer: createKnownPlayer } = usePlayerRegistry(isAdmin);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [newLeagueName, setNewLeagueName] = useState('');
@@ -48,7 +51,6 @@ const Leagues = () => {
   const [editingPlayer, setEditingPlayer] = useState<PlayerStats | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAddPlayer, setShowAddPlayer] = useState(false);
-  const [newPlayerName, setNewPlayerName] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Edit form state
@@ -206,26 +208,33 @@ const Leagues = () => {
     toast.success('Spieler entfernt');
   };
 
-  const handleAddPlayer = async () => {
-    if (!selectedLeague || !newPlayerName.trim()) return;
+  const handleAddPlayer = async (picked: PickedPlayer) => {
+    if (!selectedLeague) return;
 
-    // The same name again would split the results of one person over two rows
-    const taken = selectedLeague.playerStats.find(s => sameName(s.player.name, newPlayerName));
+    // The same person again would split the results over two rows
+    const taken = selectedLeague.playerStats.find(
+      s => sameName(s.player.name, picked.name) || (picked.ref !== undefined && s.player.ref === picked.ref),
+    );
     if (taken) {
       toast.error(`„${taken.player.name}“ gibt es in dieser Liga schon.`);
       return;
     }
-    const similar = findNameCandidates(
-      newPlayerName,
-      selectedLeague.playerStats.map(s => ({ name: s.player.name, points: s.points, championships: s.championships || 0 })),
-    );
-    if (similar.length > 0) {
-      toast.warning(`Ähnlich: ${similar.map(c => `„${c.name}“`).join(', ')}. Der Spieler wurde trotzdem angelegt.`);
+    if (!registry) {
+      // Without the player list the names of the league are the only hint
+      const similar = findNameCandidates(
+        picked.name,
+        selectedLeague.playerStats.map(s => ({ name: s.player.name, points: s.points, championships: s.championships || 0 })),
+      );
+      if (similar.length > 0) {
+        toast.warning(`Ähnlich: ${similar.map(c => `„${c.name}“`).join(', ')}. Der Spieler wurde trotzdem angelegt.`);
+      }
     }
 
+    // A known player keeps its fixed id in every league; free text gets an id of its own as before
     const newPlayer: Player = {
-      id: crypto.randomUUID(),
-      name: newPlayerName.trim(),
+      id: picked.ref ?? crypto.randomUUID(),
+      name: picked.name,
+      ...(picked.ref ? { ref: picked.ref } : {}),
     };
 
     const newStat: PlayerStats = {
@@ -249,7 +258,6 @@ const Leagues = () => {
     if (!(await persistLeague(updatedLeague))) return;
     setLeagues(updatedLeagues);
     setSelectedLeague(updatedLeague);
-    setNewPlayerName('');
     setShowAddPlayer(false);
     toast.success(`Spieler "${newPlayer.name}" hinzugefügt`);
   };
@@ -774,23 +782,20 @@ const Leagues = () => {
           <DialogHeader>
             <DialogTitle>Spieler hinzufügen</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="playerName">Spielername</Label>
-            <Input
-              id="playerName"
-              placeholder="Name eingeben..."
-              value={newPlayerName}
-              onChange={(e) => setNewPlayerName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddPlayer()}
+          <div className="py-4 space-y-2">
+            <Label>Spieler</Label>
+            <PlayerNameField
+              registry={registry}
+              onCreate={createKnownPlayer}
+              onPick={handleAddPlayer}
+              isTaken={known => !!selectedLeague?.playerStats.some(s => s.player.ref === known.ref || sameName(s.player.name, known.name))}
+              placeholder={registry ? 'Spieler suchen oder neu eingeben...' : 'Name eingeben...'}
+              autoFocus
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddPlayer(false)}>
-              Abbrechen
-            </Button>
-            <Button onClick={handleAddPlayer} disabled={!newPlayerName.trim()}>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Hinzufügen
+              Schließen
             </Button>
           </DialogFooter>
         </DialogContent>

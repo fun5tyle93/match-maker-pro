@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlayerRegistry } from '@/hooks/usePlayerRegistry';
 import { generatePairings } from '@/lib/pairingGenerator';
 import { pendingDeciders, rankPlayers, winnerAndRunnerUp, DeciderResult } from '@/lib/ranking';
 import { applySessionToLeague, NameMatchesByLeague } from '@/lib/leagueTransfer';
@@ -43,6 +44,7 @@ import { cn } from '@/lib/utils';
 const Training = () => {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const { registry, addPlayer: createKnownPlayer } = usePlayerRegistry(isAdmin);
   const [players, setPlayers] = useState<Player[]>([]);
   const [session, setSession] = useState<TrainingSession | null>(null);
   const [matchesPerPairing, setMatchesPerPairing] = useState(1);
@@ -97,12 +99,13 @@ const Training = () => {
     loadData();
   }, [loadData]);
 
-  const handleAddPlayer = (name: string) => {
-    if (players.some(p => sameName(p.name, name))) {
+  const handleAddPlayer = (name: string, ref?: string) => {
+    if (players.some(p => sameName(p.name, name) || (ref && p.ref === ref))) {
       toast.error('Spieler existiert bereits');
       return;
     }
-    const newPlayer: Player = { id: crypto.randomUUID(), name };
+    // A known player keeps its fixed id on every evening; free text gets an id of its own as before
+    const newPlayer: Player = { id: ref ?? crypto.randomUUID(), name, ...(ref ? { ref } : {}) };
     setPlayers([...players, newPlayer]);
   };
 
@@ -389,6 +392,8 @@ const Training = () => {
                   players={players}
                   onAddPlayer={handleAddPlayer}
                   onRemovePlayer={handleRemovePlayer}
+                  registry={registry}
+                  onCreatePlayer={createKnownPlayer}
                 />
 
                 <Card className="animate-fade-in">
