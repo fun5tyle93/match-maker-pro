@@ -609,7 +609,7 @@ Sie ist additiv. Die bestehenden Policies gelten auch für die neue Spalte. Zuer
 
 Heute ist ein Spieler nur ein Name.
 - **Abende:** `training_players.player_id` ist pro Abend neu zufällig. „Max Daub“ hat 13 verschiedene IDs.
-- **Ligen:** Sie verknüpfen über den Namen (Groß-/Kleinschreibung egal), beim Übertragen mit einem Ähnlichkeitsdialog.
+- **Ligen:** Sie verknüpfen über den Namen (`src/lib/nameMatching.ts`). Gleicher Name bis auf Groß-/Kleinschreibung, Leerzeichen, Bindestriche, Umlaute und Akzente wird automatisch zugeordnet. Verschreiber, vertauschte Wörter, Zusatz im Namen oder nur der Vorname führen beim Übertragen zu einer Frage pro Liga (Dialog „Ist das dieselbe Person?“); mehrere Kandidaten stehen zur Auswahl, „neuer Spieler“ ist immer möglich.
 - **Statistik:** Sie gruppiert nach normalisiertem Namen.
 
 Folgen in den echten Daten:

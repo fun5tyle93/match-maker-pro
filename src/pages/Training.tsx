@@ -22,7 +22,8 @@ import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { generatePairings } from '@/lib/pairingGenerator';
 import { pendingDeciders, rankPlayers, winnerAndRunnerUp, DeciderResult } from '@/lib/ranking';
-import { applySessionToLeague } from '@/lib/leagueTransfer';
+import { applySessionToLeague, NameMatchesByLeague } from '@/lib/leagueTransfer';
+import { sameName } from '@/lib/nameMatching';
 import { DeciderDialog, DeciderGroup } from '@/components/DeciderDialog';
 import { groupMatchesByRound, pausingPlayers } from '@/lib/tables';
 import { PauseNotice } from '@/components/PauseNotice';
@@ -97,7 +98,7 @@ const Training = () => {
   }, [loadData]);
 
   const handleAddPlayer = (name: string) => {
-    if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    if (players.some(p => sameName(p.name, name))) {
       toast.error('Spieler existiert bereits');
       return;
     }
@@ -189,7 +190,7 @@ const Training = () => {
     setShowTransferDialog(true);
   };
 
-  const handleTransferResults = async (leagueIds: string[], nameMatches: Map<string, string>) => {
+  const handleTransferResults = async (leagueIds: string[], nameMatches: NameMatchesByLeague) => {
     if (!session) return;
 
     const ranked = rankPlayers(session.players, session.matches, session.rankingRule ?? 'legacy', session.deciderResults ?? []);
@@ -205,7 +206,7 @@ const Training = () => {
     const targetIds = leagueIds.filter(id => !alreadyDone.includes(id));
 
     const updatedLeagues = leagues.map(league =>
-      targetIds.includes(league.id) ? applySessionToLeague(league, stats, firstPlace, secondPlace, nameMatches) : league,
+      targetIds.includes(league.id) ? applySessionToLeague(league, stats, firstPlace, secondPlace, nameMatches.get(league.id) ?? new Map()) : league,
     );
 
     // Save league by league. After each league the evening is marked as transferred to it,

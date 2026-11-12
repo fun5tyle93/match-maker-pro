@@ -40,7 +40,8 @@ import {
 } from '@/lib/storage';
 import { useSwissAutosave, findRestorableSwissBackup, clearSwissBackup, announceRestored } from '@/hooks/useSwissAutosave';
 import { maxSwissRounds, PairingBudgetError, SwissPairingError } from '@/lib/swissPairingEngine';
-import { applySessionToLeague } from '@/lib/leagueTransfer';
+import { applySessionToLeague, NameMatchesByLeague } from '@/lib/leagueTransfer';
+import { sameName } from '@/lib/nameMatching';
 import { cn } from '@/lib/utils';
 import { pluralize } from '@/lib/plural';
 import { handleExportXLSX, handleExportPDF, persistSwissToHistory, convertSwissToTrainingSession, computeFinalSwissStats } from '@/pages/swissHelpers';
@@ -187,7 +188,7 @@ export default function SchweizSystem() {
   // ─── Player management ────────────────────────────────────────────────
 
   const handleAddPlayer = (name: string) => {
-    if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    if (players.some(p => sameName(p.name, name))) {
       toast.error('Spieler existiert bereits');
       return;
     }
@@ -370,7 +371,7 @@ export default function SchweizSystem() {
     setShowTransferDialog(true);
   };
 
-  const handleTransferResults = async (leagueIds: string[], nameMatches: Map<string, string>) => {
+  const handleTransferResults = async (leagueIds: string[], nameMatches: NameMatchesByLeague) => {
     if (!session) return;
     // Final results: Vorrunde + Playoff-Spiele; Titel aus dem Playoff-Finale (falls gespielt)
     const { stats, championName: firstPlace, viceChampionName: secondPlace } = computeFinalSwissStats(session);
@@ -381,7 +382,7 @@ export default function SchweizSystem() {
 
     // The same booking as for a training evening (shared function): the eternal table only gets points and championships
     const updatedLeagues = leagues.map(league =>
-      targetIds.includes(league.id) ? applySessionToLeague(league, stats, firstPlace, secondPlace, nameMatches) : league,
+      targetIds.includes(league.id) ? applySessionToLeague(league, stats, firstPlace, secondPlace, nameMatches.get(league.id) ?? new Map()) : league,
     );
 
     // Save league by league and remember each one, so a repeated transfer never counts twice
