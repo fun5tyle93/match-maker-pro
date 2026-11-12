@@ -5,6 +5,7 @@ import { TrainingSession, League, Player, Match, PlayerStats } from '@/types';
 import { SwissSession } from '@/types/swiss';
 import { PLAYOFF_PLACEHOLDER_PREFIX } from './tournamentPhases';
 import { buildRegistry, EMPTY_REGISTRY, PlayerRegistry } from './playerRegistry';
+import type { Numbers } from './leagueStandings';
 import { sortMatches } from '@/lib/tables';
 
 // ─── Helper: Fetch all rows, paging past the PostgREST row limit (default 1000) ───
@@ -157,6 +158,53 @@ export async function createPlayer(displayName: string): Promise<{ id: string; d
     if (ref) return { id: ref, displayName: registry.names.get(ref) ?? name };
   }
   throw error ?? new Error('Spieler konnte nicht angelegt werden');
+}
+
+// ─── Opening balances of the league check ───
+
+const OPENING_COLUMNS = {
+  wins: 'wins', draws: 'draws', losses: 'losses', goalsFor: 'goals_for', goalsAgainst: 'goals_against', points: 'points',
+  pointsAgainst: 'points_against', goalDifference: 'goal_difference', championships: 'championships',
+  viceChampionships: 'vice_championships',
+} as const;
+
+/**
+ * The opening balances of a league by player identity, or null when the table does not exist (the check is not set
+ * up yet in this database). Any other error is thrown.
+ */
+export async function loadOpeningBalances(leagueId: string): Promise<Map<string, Numbers> | null> {
+  const rows = await fetchAll(() => supabase.from('league_opening_balances').select('*').eq('league_id', leagueId).order('player_ref', { ascending: true })).catch(error => {
+    if (error?.code === '42P01' || error?.code === 'PGRST205' || /schema cache|does not exist/.test(error?.message ?? '')) return null;
+    throw error;
+  });
+  if (rows === null) return null;
+  return new Map(
+    rows.map(r => [
+      r.player_ref as string,
+      Object.fromEntries(Object.entries(OPENING_COLUMNS).map(([column, dbColumn]) => [column, Number(r[dbColumn]) || 0])) as Numbers,
+    ]),
+  );
+}
+
+/** Replaces the opening balances of a league. Rows are written first, rows that are no longer wanted are removed after. */
+export async function saveOpeningBalances(leagueId: string, entries: { ref: string; opening: Numbers }[]): Promise<void> {
+  const rows = entries.map(({ ref, opening }) => ({
+    league_id: leagueId,
+    player_ref: ref,
+    updated_at: new Date().toISOString(),
+    ...Object.fromEntries(Object.entries(OPENING_COLUMNS).map(([column, dbColumn]) => [dbColumn, opening[column as keyof Numbers]])),
+  }));
+  for (const part of chunk(rows, 500)) {
+    const { error } = await supabase.from('league_opening_balances').upsert(part as never);
+    if (error) throw error;
+  }
+  const existing = await fetchAll(() => supabase.from('league_opening_balances').select('player_ref').eq('league_id', leagueId).order('player_ref', { ascending: true }));
+  const wanted = new Set(entries.map(e => e.ref));
+  const stale = existing.map(r => r.player_ref as string).filter(ref => !wanted.has(ref));
+  for (const part of chunk(stale)) {
+    const { error } = await supabase.from('league_opening_balances').delete().eq('league_id', leagueId).in('player_ref', part);
+    if (error) throw error;
+  }
 }
 
 // ─── Leagues ───
