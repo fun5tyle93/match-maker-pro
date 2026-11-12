@@ -153,7 +153,7 @@ Das ist eine lauffähige Referenz des Algorithmus aus Schritt B, inklusive Simul
 
 ### 4.5 Referenz der DTKV-Wertung: `scripts/dtkv-ranking-reference.mjs`
 
-Das ist eine lauffähige Referenz von SO § 8 Abs. 3 mit den 6 Pflichtfällen aus 6.1 (`node scripts/dtkv-ranking-reference.mjs`). Mit einem Backup-Ordner als Argument vergleicht das Skript jeden gespeicherten Abend zwischen alter und neuer Wertung. Übersetze `rankGroup` nach TypeScript und prüfe deine Umsetzung gegen dieses Skript, zum Beispiel mit denselben Fällen und zufälligen Abenden, die beide Implementierungen gleich ordnen müssen.
+Das ist eine lauffähige Referenz von SO § 8 Abs. 3 (Fälle 1 bis 6 aus 6.1) und SO § 9 Abs. 6 (Fall 7 aus 6.8, Abschlussrangliste mit halben Punkten nach Sudden Death) (`node scripts/dtkv-ranking-reference.mjs`). Mit einem Backup-Ordner als Argument vergleicht das Skript jeden gespeicherten Abend zwischen alter und neuer Wertung. Übersetze `rankGroup` nach TypeScript und prüfe deine Umsetzung gegen dieses Skript, zum Beispiel mit denselben Fällen und zufälligen Abenden, die beide Implementierungen gleich ordnen müssen.
 
 ---
 
@@ -182,7 +182,7 @@ Das ist eine lauffähige Referenz von SO § 8 Abs. 3 mit den 6 Pflichtfällen au
 
 ## 6. Schritt W: Wertung nach DTKV-Spielordnung
 
-**Branch:** `feat/dtkv-ranking`. Enthält eine additive Migration (6.8).
+**Branch:** `feat/dtkv-ranking`. Enthält eine additive Migration (6.9).
 
 **Quellen:** DTKV-Spielordnung, Stand 24. März 2026 („SO“), und DTKV-Spielregeln 2025. Der Nutzer hat beide Dokumente bereitgestellt. Maßgeblich sind:
 - **SO § 8 Abs. 2:** Punkteverteilung im Turnier. Sieg 2:0, Unentschieden 1:1, Niederlage 0:2. Das entspricht dem heutigen Code.
@@ -217,7 +217,7 @@ Ergebnis = rang(alle Spieler des Abends, [])
 - **Mehrfache Begegnungen:** Bei Hin- und Rückrunde (`matchesPerPairing` > 1) zählen für den direkten Vergleich alle Spiele der beiden gegeneinander.
 - **Wertung zählt nur die Vorrunde:** Gewertet werden nur abgeschlossene Spiele mit Ergebnis der Gruppe, also nicht Playoff und nicht Entscheidungsspiele.
 
-**Pflicht-Testfälle** (`npm test`; sie stehen auch im Referenzskript, `node scripts/dtkv-ranking-reference.mjs` muss 6× OK ausgeben):
+**Pflicht-Testfälle** (`npm test`; sie stehen auch im Referenzskript, `node scripts/dtkv-ranking-reference.mjs` muss 7× OK ausgeben (Fälle 1 bis 6 hier, Fall 7 in 6.8)):
 
 | Fall | Spiele (Heim-Gast Tore) | Erwartet nach DTKV | Alte App |
 |---|---|---|---|
@@ -237,7 +237,7 @@ Die SO sieht ein Entscheidungsspiel nur vor, wenn es um die Qualifikation für d
 - **Platz 1 oder 2 betroffen:** Bleibt nach 6.1 ein Gleichstand, der Platz 1 oder Platz 2 berührt, wird ein Entscheidungsspiel ausgetragen, bei mehr als zwei Spielern eine Entscheidungsrunde. Es gilt der K.-o.-Modus mit Sudden Death (SO § 8 Abs. 4, § 9 Abs. 2).
   - **Eintragen:** Beim Klick auf „Training abschließen“ erscheint ein Dialog „Gleichstand um Platz X – Entscheidungsspiel“, in dem der Admin den Sieger auswählt. Bei einer Runde gibt er die Reihenfolge an.
   - **Keine Wertung:** Das Ergebnis zählt **nicht** zu Punkten und Toren des Abends. Es legt nur die Reihenfolge fest.
-  - **Speicherort:** neue Spalte `training_sessions.decider_results`, siehe 6.8.
+  - **Speicherort:** neue Spalte `training_sessions.decider_results`, siehe 6.9.
 - **Hintere Plätze:** Ein Gleichstand dort bleibt stehen. Die Tabelle zeigt dann für alle Beteiligten dieselbe Platzzahl (zum Beispiel zweimal „4.“), mit dem Hinweis „gleichauf“.
 
 Laut Backup gab es bisher an keinem Abend einen solchen völligen Gleichstand. Die Regel betrifft also nur künftige Abende.
@@ -252,7 +252,7 @@ Nachrechnung aller 24 abgeschlossenen Abende aus dem Backup vom 06.11.2026 (`nod
 Die Meister- und Vizetitel dieser Abende sind in den Jahrestabellen aber bereits gezählt. Historie, Statistik und Export rechnen die Rangfolge jedes Mal neu aus. Ohne Vorkehrung würden sie für alte Abende plötzlich andere Sieger zeigen als die Ligen.
 
 Deshalb bekommt jeder Abend die Wertungsregel, nach der er gespielt wurde:
-- **Neue Spalte** `training_sessions.ranking_rule text` (6.8).
+- **Neue Spalte** `training_sessions.ranking_rule text` (6.9).
 - **Bestehende Abende:** Sie bekommen in der Migration `'legacy'`, das ist die bisherige Sortierung aus `calculatePlayerStats`. Sie wird unverändert als `rankLegacy` erhalten.
 - **Neue Abende:** Sie bekommen `'dtkv2026'`, über den Default der Spalte, und die App setzt den Wert zusätzlich ausdrücklich.
 - **Alle Stellen**, die eine Rangfolge eines Abends zeigen oder verwenden, wählen die Funktion nach `ranking_rule`. Der Nutzer hat am 12.11.2026 entschieden: **keine** rückwirkende Umstellung alter Abende.
@@ -292,9 +292,65 @@ Die Kriterien 4 bis 6 sind neu. Diese Rangliste bestimmt die Auslosung (Schritt 
 - **Regel:** Im K.-o.-Spiel gewinnt, wer die meisten Tore erzielt (SO § 9 Abs. 1). Bei Gleichstand wird mit Sudden Death weitergespielt, bis ein Tor fällt (§ 9 Abs. 2). Im Finale gibt es erst eine Verlängerung von 2 × 2 Minuten, dann eine Neuansetzung und dann Sudden Death (§ 9 Abs. 3). Ein K.-o.-Spiel hat also nie ein unentschiedenes Endergebnis.
 - **Heute:** Die App nimmt im Playoff ein Unentschieden an. `playoffMatchWinner` liefert dann `null`, und das Playoff hängt.
 - **Neu:** Die Eingabe eines gleichen Ergebnisses in einem Playoff- oder Entscheidungsspiel wird abgelehnt, mit dem Hinweis „Im K.-o.-Spiel gibt es kein Unentschieden. Bitte das Endergebnis inklusive Sudden-Death-Tor eintragen.“ Die Validierung gilt in `PlayoffBracket.tsx` und überall dort, wo Playoff-Ergebnisse gespeichert werden.
-- **Nicht umgesetzt:** Halbe Punkte nach Sudden Death (§ 9 Abs. 6: Sieg 1,5 / Niederlage 0,5) gelten laut SO nur für die Gesamtplatzierung der im Playoff Ausgeschiedenen. Die App rechnet Playoff-Spiele weiter mit 2/0 in die Turnierwertung. Das wird dem Nutzer mitgeteilt (11).
+- **Sudden Death erfassen:** Bei jedem Playoff- und Entscheidungsspiel gibt es zusätzlich einen Schalter „durch Sudden Death entschieden“. Ist er an, muss der Sieger genau ein Tor mehr haben, denn Sudden Death endet mit dem nächsten Tor. Sonst erscheint der Hinweis „Bei Sudden Death gewinnt der Sieger mit genau einem Tor Vorsprung.“
+  - **Im Finale:** Nach einer Verlängerung (2 × 2 min, § 9 Abs. 3) ist der Schalter aus. Nur ein echtes Sudden-Death-Tor zählt.
+  - **Gespeichert:** in `PlayoffMatch.suddenDeath` (im `swiss_state`) und in der neuen Spalte `matches.sudden_death` (6.9).
+  - **Gebraucht für:** die Abschlussrangliste (6.8).
 
-### 6.8 Migration für Schritt W
+### 6.8 Abschlussrangliste im Schweizer System: SO § 9 Abs. 6 (verbindlich, vom Nutzer präzisiert)
+
+Wortlaut der Regel: „Alle ausgeschiedenen Spieler einer Play-Off-Runde werden nach den folgenden Kriterien für die Gesamtwertung eingeordnet:
+1. Anzahl der erspielten Punkte
+2. Tordifferenz aus allen Spielen
+3. die bessere Endplatzierung des Gegners
+
+[Punkte im Playoff:] Sieg ohne Sudden Death 2, Sieg nach Sudden Death 1,5, Niederlage nach Sudden Death 0,5, Niederlage ohne Sudden Death 0. Man beginnt bei den Ausgeschiedenen des Halbfinales, danach sind die ersten vier eindeutig platziert; dann die des Viertelfinales, danach die ersten 8, es folgen die des Achtelfinales usw.“
+
+**Festlegung des Nutzers (12.11.2026):** Die Punkte der Abschlussrangliste sind die **Gesamtpunkte der Vorrunde plus die Punkte aus dem Playoff**, zusammengezählt. Die halben Punkte sind nur die Zählformel für Playoff-Spiele, die durch Sudden Death entschieden wurden. Mit ihnen lassen sich die Plätze bestimmen. Entsprechend gilt für die Tordifferenz „aus allen Spielen“: Vorrunde plus Playoff. **Im Verein gibt es pro Playoff-Paarung immer genau ein Spiel.** Die Best-of-Varianten aus § 9 Abs. 5 werden also nicht gebraucht.
+
+**Algorithmus** (Referenz: `finalRankingSwiss` in `scripts/dtkv-ranking-reference.mjs`, importierbar):
+1. **Plätze 1 und 2:** Platz 1 ist der Sieger des Finales, Platz 2 der Verlierer.
+2. **Ausgeschiedene je Runde:** Danach Runde für Runde rückwärts (Halbfinale, Viertelfinale, Achtelfinale) die Verlierer dieser Runde. Ein Halbfinal-Verlierer steht also immer vor einem Viertelfinal-Verlierer. Sortiert wird innerhalb der Runde nach
+   1. **Punkten:** Gesamtpunkte der Vorrunde (2 / 1 / 0 je Spiel, ein Vorrunden-Freilos gibt 0) **plus** Playoff-Punkte (2 / 1,5 / 0,5 / 0 je Spiel; ein Playoff-Freilos zählt als kein Spiel und gibt 0)
+   2. **Tordifferenz:** aus allen Spielen, also Vorrunde plus Playoff
+   3. **Endplatzierung des Gegners,** gegen den sie ausgeschieden sind. Wer gegen den besser Platzierten verloren hat, steht vorn. Der Gegner ist immer schon platziert, weil rückwärts gearbeitet wird. Dieses Kriterium entscheidet immer, denn jeder Spieler einer Runde scheidet gegen einen anderen Gegner aus.
+3. **Nicht qualifizierte Spieler:** Wer sich nicht fürs Playoff qualifiziert hat, folgt in der Reihenfolge der Swiss-Rangliste (6.6). Das ist analog zu SO § 8 Abs. 8 und als Vereinsregel ergänzt.
+4. **Ohne Playoff** (`endMode = 'direct'`): Die Abschlussrangliste ist die Swiss-Rangliste (6.6).
+
+**Grenzen der Regel:**
+- **Liga-Übertragung bleibt ganzzahlig:** Die halben Punkte gelten nur für die Abschlussrangliste. In die Jahrestabellen und die Ewige Tabelle gehen Playoff-Spiele weiter mit 2 / 0 Punkten ein, wie heute in `computeFinalSwissStats`. Meister und Vize kommen weiter aus dem Finale.
+- **Heutiger Fehler:** `computeFinalSwissStats` setzt bisher nur Sieger und Finalverlierer nach vorn und sortiert alle anderen nach Gesamtpunkten, ohne die Ausscheiderunde zu beachten. Ein Achtelfinal-Verlierer kann so vor einem Halbfinalisten stehen. Diese Sortierung wird durch den Algorithmus oben ersetzt.
+
+**Anzeige:**
+- **Turnier:** Nach dem Finale erscheint in `SchweizSystem.tsx` die Tabelle „Abschlussrangliste“ mit den Spalten:
+  - Platz
+  - Spieler
+  - „ausgeschieden in“ (Finale, Halbfinale, Viertelfinale, Achtelfinale, Vorrunde)
+  - Punkte gesamt, mit Komma bei halben Punkten (zum Beispiel „12,5“), dahinter in Klammern „davon Playoff“
+  - Tordifferenz gesamt
+
+  Darunter steht ein Hinweis: „Platzierung nach DTKV-Spielordnung § 9 Abs. 6: Punkte aus Vorrunde und Playoff, Sudden-Death-Sieg 1,5 / -Niederlage 0,5 Punkte“.
+- **Historie:** Die Details eines Swiss-Abends mit Playoff zeigen dieselbe Abschlussrangliste. Sie wird aus den gespeicherten Spielen berechnet (`phase`, `playoff_round`, `sudden_death`). Vorrundenpunkte und -tore kommen aus den Spielen mit `phase = 'swiss'`.
+- **Exporte:** PDF und Excel eines Swiss-Abends mit Playoff bekommen die Abschlussrangliste als eigene Tabelle bzw. als eigenes Blatt „Abschlussrangliste“.
+
+**Pflicht-Testfall** (Fall 7 im Referenzskript): Playoff ab dem Viertelfinale mit 8 von 12 Spielern.
+- **Vorrunde** (Punkte / Tordifferenz):
+  - P1 10/+12, P2 9/+8, P3 9/+5, P4 8/+6
+  - P5 8/+3, P6 7/+2, P7 7/+1, P8 7/−2
+  - P9 5/0, P10 4/−3, P11 3/−6, P12 2/−9
+- **Playoff:**
+  - VF P1-P8 2:1, P4-P5 2:3 (Sudden Death), P2-P7 4:0, P3-P6 1:2
+  - HF P1-P5 1:2, P2-P6 2:1 (Sudden Death)
+  - Finale P5-P2 0:3
+- **Erwartet:** P2 > P5 > P1 > P6 > P3 > P4 > P7 > P8 > P9 > P10 > P11 > P12.
+- **Begründung:**
+  - Halbfinale: P1 hat 10 + 2 = 12 Punkte, P6 hat 7 + 2 + 0,5 = 9,5.
+  - Viertelfinale: P3 hat 9, P4 hat 8 + 0,5 = 8,5. P7 und P8 haben beide 7 Punkte und −3 Tore. P7 hat gegen den Ersten verloren, P8 gegen den Dritten, also steht P7 vorn.
+  - Gegenprobe: Mit der falschen Auslegung „nur Playoff-Punkte“ ergibt sich eine andere Reihenfolge (P6 vor P1). Der Test erkennt diesen Fehler also.
+
+Zusätzlich sind Tests nötig für Playoffs ab dem Achtelfinale und ab dem Halbfinale, für Playoffs mit Freilos und für das progressive Format, bei dem die besten vier direkt im Viertelfinale stehen. Für zufällige Turniere muss die TypeScript-Umsetzung dieselbe Reihenfolge liefern wie `finalRankingSwiss` aus dem Referenzskript.
+
+### 6.9 Migration für Schritt W
 
 ```sql
 -- supabase/migrations/<timestamp>_ranking_rule.sql
@@ -306,16 +362,18 @@ ALTER TABLE public.training_sessions ALTER COLUMN ranking_rule SET NOT NULL;
 ALTER TABLE public.training_sessions ADD CONSTRAINT training_sessions_ranking_rule_check CHECK (ranking_rule IN ('legacy', 'dtkv2026'));
 -- Result of a decider (Entscheidungsspiel/-runde) for a complete tie at place 1 or 2: [{ "players": [id, ...], "order": [id, ...] }]
 ALTER TABLE public.training_sessions ADD COLUMN IF NOT EXISTS decider_results jsonb;
+-- Playoff game decided by sudden death (Spielordnung § 9 Abs. 2); needed for the final ranking (§ 9 Abs. 6)
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS sudden_death boolean NOT NULL DEFAULT false;
 ```
 
-Das `UPDATE` füllt nur die neue Spalte und ist deshalb erlaubt (Regel 4). Der Fingerabdruck muss vorher und nachher identisch sein, weil er die neuen Spalten nicht liest. Prüfe zusätzlich: `SELECT ranking_rule, count(*) FROM training_sessions GROUP BY 1` liefert nur `legacy`.
+Das `UPDATE` füllt nur die neue Spalte und ist deshalb erlaubt (Regel 4). **Bereits geprobt** am 12.11.2026 an der Probe-DB mit dem Backup vom 06.11.2026: Der Fingerabdruck war identisch, alle 27 Abende standen auf `legacy`, ein neuer Abend bekam `dtkv2026`, und `sudden_death` war überall `false`. Der Fingerabdruck muss vorher und nachher identisch sein, weil er die neuen Spalten nicht liest. Prüfe zusätzlich: `SELECT ranking_rule, count(*) FROM training_sessions GROUP BY 1` liefert nur `legacy`.
 
 - **Probe zuerst:** Erst die Probe-DB (4.1), dann 🛑 Zustimmung, dann live.
 - **App ohne Migration:** Fehlt die Spalte (Vorschau vor der Migration), behandelt die App alle Abende als `legacy`, neue eingeschlossen. So ändert sich nichts, solange die Migration nicht live ist.
 - **Laufender Abend:** Wird zum Zeitpunkt der Migration gerade ein Abend gespielt, bekommt er `legacy`. Deshalb gilt Regel 9: keine Migration während eines Trainings.
 - **Zeitfenster zwischen Migration und Auslieferung:** Nach der Migration bekommen neue Abende per Default `dtkv2026`. Die noch laufende alte App-Version würde sie aber nach der alten Regel anzeigen und übertragen. Merge den PR deshalb direkt nach der Migration und prüfe, dass das Vercel-Deployment fertig ist. In diesem Zeitfenster darf kein Abend gestartet werden. Sprich das mit dem Nutzer ab.
 
-### 6.9 Umsetzung im Code
+### 6.10 Umsetzung im Code
 
 - **Neue Datei `src/lib/ranking.ts`** (rein funktional, ohne React und ohne Supabase). Inhalt:
   - `rankGroupDtkv(players, matches, deciders?)`: liefert Blöcke, wie die Referenz.
@@ -324,8 +382,10 @@ Das `UPDATE` füllt nur die neue Spalte und ist deshalb erlaubt (Regel 4). Der F
   - `compareLeagueRows`: nach 6.4.
   - `compareEternalRows`: nach 6.5.
   - `rankSwiss`: nach 6.6.
+  - `finalRankingSwiss(playoffMatches, swissRanking)`: nach 6.8.
 - **`calculatePlayerStats`** berechnet weiter nur die Zahlen. Das Sortieren übernimmt `ranking.ts`.
 - **`TrainingSession`** bekommt `rankingRule?: 'legacy' | 'dtkv2026'` und `deciderResults?`. `storage.ts` liest und schreibt beides. Fehlt die Spalte beim Lesen, gilt `'legacy'`.
+- **Sudden Death:** `Match` und `PlayoffMatch` bekommen `suddenDeath?: boolean`. `syncMatches` in `storage.ts` schreibt `sudden_death` nur, wenn die Spalte existiert. Vor der Migration wird das Feld weggelassen, damit die Vorschau nicht scheitert. `toMatch` liest das Feld mit `false` als Ersatz. `convertSwissToTrainingSession` übernimmt das Feld.
 - **Alle Stellen umstellen**, die heute selbst sortieren oder `calculatePlayerStats(...)[0]` als Sieger nehmen. Zum Stand `main` am 12.11.2026 sind das:
   - `src/pages/Training.tsx` (Tabelle, Sieger und Vize beim Übertragen, Sortierung der Liga nach dem Übertragen)
   - `src/pages/History.tsx` (Liste und Details; Abende mit `tournamentType = 'swiss'` mit der Swiss-Rangliste)
@@ -339,13 +399,14 @@ Das `UPDATE` füllt nur die neue Spalte und ist deshalb erlaubt (Regel 4). Der F
 - **Anzeige von Gleichstand:** Die Tabellenkomponenten (`StandingsTable`, Liga-Tabellen, PDF und Excel) zeigen bei Gleichstand dieselbe Platzzahl.
 - **Erläuterung:** Ein kurzer Hinweis unter der Abendtabelle („Bei Punktgleichheit: direkter Vergleich, dann Tordifferenz und Tore nach DTKV-Spielordnung § 8 Abs. 3“). Er erscheint nur für `dtkv2026`.
 
-### 6.10 Abnahme Schritt W
+### 6.11 Abnahme Schritt W
 
 - Die 6 Pflichtfälle und die Eigenschaftstests sind grün. Die Mutationen schlagen an: Direkter Vergleich entfernt, Untergruppe nicht neu gerechnet, Tore aus der falschen Gruppe.
 - **Altdaten-Test:** Alle `legacy`-Abende aus dem Backup zeigen in Historie, PDF, Excel und Statistik denselben Sieger und dieselbe Reihenfolge wie vorher. Vergleiche über einen Test mit den Backup-Daten oder einen Browsertest.
 - **Neuer Abend:** Er speichert `ranking_rule = 'dtkv2026'` und wird nach DTKV sortiert. Prüfe das per Browsertest mit zustandsbehaftetem Mock und dem Fall 1 aus 6.1.
 - **Entscheidungsspiel-Dialog:** Er erscheint bei völligem Gleichstand um Platz 1 und schreibt `decider_results`.
-- **Playoff:** Ein unentschiedenes Ergebnis wird abgelehnt.
+- **Playoff:** Ein unentschiedenes Ergebnis wird abgelehnt. Bei Sudden Death wird nur ein Ein-Tor-Sieg angenommen, und `sudden_death` wird gespeichert.
+- **Abschlussrangliste:** Fall 7 und die zusätzlichen Formate aus 6.8 sind grün. Ein Browsertest spielt ein Swiss-Turnier mit Playoff durch und prüft die angezeigte Abschlussrangliste samt halber Punkte.
 - **Fingerabdruck:** Er ist live vorher und nachher identisch.
 
 ---
@@ -702,6 +763,8 @@ Sie wird per `supabase.rpc('complete_session', …)` aufgerufen und ersetzt die 
 
 - **Wertung bei Gleichstand:** nach DTKV-Spielordnung 2026, siehe Schritt W. Für den Abend gilt § 8 Abs. 3, für die Jahrestabelle analog § 2 Abs. 6.
 - **Freilos im Schiedsrichter-Modus:** Der Spieler mit Freilos ist in beiden Durchgängen der Runde Schiedsrichter (R8).
+- **Halbe Punkte nach Sudden Death:** werden umgesetzt, für die Abschlussrangliste im Schweizer System nach SO § 9 Abs. 6 (6.7, 6.8). Die Punkte sind Vorrunde plus Playoff, die halben Punkte sind nur die Zählformel für Sudden-Death-Spiele. Die Liga-Übertragung bleibt ganzzahlig.
+- **Playoff:** Pro Paarung gibt es immer genau ein Spiel, keine Best-of-Varianten.
 - **Namen in den Jahrestabellen:** ausgeklammert. Die Ewige Tabelle wird im nächsten Schritt gemeinsam geprüft (Schritt D, Hinweis oben).
 
 ### Ergänzte Regeln (vom Nutzer am 12.11.2026 bestätigt)
@@ -710,13 +773,13 @@ Diese Regeln stehen nicht in der Spielordnung und gelten verbindlich wie beschri
 1. **Völliger Gleichstand um Platz 1 oder 2 am Abend:** Entscheidungsspiel oder -runde mit Sudden Death, ohne Wertung in Punkten und Toren (6.2).
 2. **Wertung im Schweizer System:** Punkte pro Spiel → Buchholz → Tordifferenz → geschossene Tore → direkter Vergleich → gespeichertes Los (6.6).
 3. **Ewige Tabelle:** Punkte → Meistertitel, danach gleiche Platzzahl (6.5).
-4. **Keine Rückwirkung:** Alte Abende bleiben `legacy`. Nur neue Abende werden nach DTKV gewertet (6.3).
+4. **Nicht fürs Playoff qualifizierte Spieler** stehen in der Abschlussrangliste in der Reihenfolge der Swiss-Rangliste (6.8).
+5. **Keine Rückwirkung:** Alte Abende bleiben `legacy`. Nur neue Abende werden nach DTKV gewertet (6.3).
 
 ### Noch offen
 
-1. **Halbe Punkte nach Sudden Death** (§ 9 Abs. 6): Sie gelten laut SO nur für die Gesamtplatzierung der im Playoff Ausgeschiedenen und sind nicht umgesetzt. Soll die App sie für Swiss-Turniere ausweisen?
-2. **Alte Ungereimtheiten in den Ligen** (10.1): Bleiben sie (Standard, über den Startbestand) oder werden sie später über `league_adjustments` mit Begründung korrigiert?
-3. **Admin-Recht:** Heute ist jeder angemeldete Nutzer Admin (`isAdmin = !!user`). Das ist sicher, solange die Registrierung aus ist. Soll zusätzlich ein ausdrückliches Admin-Kennzeichen eingeführt werden, das auch die Datenbankregeln prüfen?
+1. **Alte Ungereimtheiten in den Ligen** (10.1): Bleiben sie (Standard, über den Startbestand) oder werden sie später über `league_adjustments` mit Begründung korrigiert?
+2. **Admin-Recht:** Heute ist jeder angemeldete Nutzer Admin (`isAdmin = !!user`). Das ist sicher, solange die Registrierung aus ist. Soll zusätzlich ein ausdrückliches Admin-Kennzeichen eingeführt werden, das auch die Datenbankregeln prüfen?
 
 ---
 
@@ -740,4 +803,5 @@ Erhoben am 12.11.2026 auf `main` (Commit `f13e179`) und am Backup vom 06.11.2026
 | Wertung weicht von DTKV ab | `calculatePlayerStats` sortiert Punkte → Tordifferenz → Tore → direkter Vergleich; SO § 8 Abs. 3 verlangt den direkten Vergleich bzw. die Untergruppe **vor** den Toren. Nachrechnung von 24 Abenden: 6 anders geordnet, 1 anderer Sieger, 4 andere Vize |
 | Jahrestabelle ohne „weniger verlorene Punkte“ | SO § 2 Abs. 6; an den aktuellen Jahrestabellen ändert die Ergänzung nichts (live geprüft) |
 | Playoff nimmt Unentschieden an | keine Prüfung in `PlayoffBracket.tsx`; `playoffMatchWinner` liefert bei Gleichstand `null`, das Playoff hängt; laut SO § 9 Abs. 1 bis 3 gibt es im K.-o.-Spiel kein Unentschieden |
+| Abschlussrangliste Swiss falsch | `computeFinalSwissStats`: nach Sieger und Vize alle nach Gesamtpunkten statt nach Ausscheiderunde (SO § 9 Abs. 6); halbe Punkte nach Sudden Death werden nicht erfasst |
 | Swiss-Wertung in der SO nicht geregelt | SO § 8 Abs. 5 nennt nur „Platzierung im Schweizer System“, keine Kriterien |
