@@ -71,9 +71,3 @@ export interface League {
   isEternal?: boolean;
 }
 
-export interface NameMatch {
-  originalName: string;
-  matchedName: string;
-  similarity: number;
-  isExact: boolean;
-}

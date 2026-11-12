@@ -34,6 +34,7 @@ import { Label } from '@/components/ui/label';
 import { League, PlayerStats, Player } from '@/types';
 import { loadLeagues, saveLeague, deleteLeague } from '@/lib/storage';
 import { compareLeagueRows, placesFor } from '@/lib/ranking';
+import { findNameCandidates, sameName } from '@/lib/nameMatching';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportActions';
 import { cn } from '@/lib/utils';
@@ -207,6 +208,20 @@ const Leagues = () => {
 
   const handleAddPlayer = async () => {
     if (!selectedLeague || !newPlayerName.trim()) return;
+
+    // The same name again would split the results of one person over two rows
+    const taken = selectedLeague.playerStats.find(s => sameName(s.player.name, newPlayerName));
+    if (taken) {
+      toast.error(`„${taken.player.name}“ gibt es in dieser Liga schon.`);
+      return;
+    }
+    const similar = findNameCandidates(
+      newPlayerName,
+      selectedLeague.playerStats.map(s => ({ name: s.player.name, points: s.points, championships: s.championships || 0 })),
+    );
+    if (similar.length > 0) {
+      toast.warning(`Ähnlich: ${similar.map(c => `„${c.name}“`).join(', ')}. Der Spieler wurde trotzdem angelegt.`);
+    }
 
     const newPlayer: Player = {
       id: crypto.randomUUID(),

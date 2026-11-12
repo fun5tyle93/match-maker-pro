@@ -73,6 +73,42 @@ describe('annual league', () => {
   });
 });
 
+describe('finding the player by name', () => {
+  const eternalBefore = league([
+    stat('Klaudio Lange', { points: 4379, pointsAgainst: 2859, championships: 85 }),
+    stat('Harald Füßinger', { points: 6196, pointsAgainst: 1976, championships: 189 }),
+  ], true);
+  const one = (name: string, points = 4, pointsAgainst = 2) => [stat(name, { points, pointsAgainst })];
+
+  it('books on the existing row when only case, spacing or umlauts differ (no second row)', () => {
+    for (const name of ['klaudio lange', 'Klaudio  Lange ', 'KLAUDIO LANGE']) {
+      const after = applySessionToLeague(eternalBefore, one(name), undefined, undefined, none);
+      expect(after.playerStats.length).toBe(2);
+      expect(row(after, 'Klaudio Lange').points).toBe(4383);
+    }
+    const umlaut = applySessionToLeague(eternalBefore, one('Harald Fuessinger'), 'Harald Fuessinger', undefined, none);
+    expect(umlaut.playerStats.length).toBe(2);
+    expect(row(umlaut, 'Harald Füßinger')).toMatchObject({ points: 6200, championships: 190 });
+  });
+
+  it('a typo creates a new row unless the user confirmed the person', () => {
+    const unconfirmed = applySessionToLeague(eternalBefore, one('Klaudo Lange'), undefined, undefined, none);
+    expect(unconfirmed.playerStats.length).toBe(3);
+    const confirmed = applySessionToLeague(eternalBefore, one('Klaudo Lange'), undefined, undefined, new Map([['Klaudo Lange', 'Klaudio Lange']]));
+    expect(confirmed.playerStats.length).toBe(2);
+    expect(row(confirmed, 'Klaudio Lange').points).toBe(4383);
+  });
+
+  it('books on the main row when the league holds the same name twice', () => {
+    const split = league([
+      stat('Klaudio Lange', { points: 4379 }),
+      stat('Klaudio Lange', { points: 36 }),
+    ], true);
+    const after = applySessionToLeague(split, one('klaudio lange'), undefined, undefined, none);
+    expect(after.playerStats.map(s => s.points).sort((a, b) => a - b)).toEqual([36, 4383]);
+  });
+});
+
 describe('eternal table', () => {
   const eternal = league([
     stat('Anna', { wins: 36, draws: 12, losses: 36, goalsFor: 100, goalsAgainst: 90, points: 40, pointsAgainst: 20, championships: 5, viceChampionships: 3 }),

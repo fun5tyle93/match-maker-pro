@@ -15,6 +15,7 @@ node e2e/complete-evening.mjs http://127.0.0.1:4173
 | `pause-e2e.mjs <url> <ausgabeordner>` | Namen passen auf schmale Bildschirme (320 bis 1100 px), PDF- und Excel-Export | Messung im Browser (`evaluate`), Downloads |
 | `dtkv-ranking.mjs <url> <ausgabeordner> [backup-data]` | DTKV-Wertung: Entscheidungsdialog bei Gleichstand, Verhalten vor der Migration, Playoff ohne Unentschieden mit Sudden Death, Abschlussrangliste (Turnier, Historie, PDF, Excel), mit Backup-Daten: Sieger der Altabende wie vorher | zustandsbehafteter Mock mit `order`-Unterstützung |
 | `swiss-flow.mjs <url> <ausgabeordner>` | Schweizer System: ganzes Turnier ohne Wiederholung, Neuladen, Abschluss mit Ewiger Tabelle; Schiedsrichter-Modus mit Freilos; Übernahme vom Gerät; Konflikt; Datenbank ohne Spalte; Zurücksetzen; nicht auslosbare Runde | zustandsbehafteter Mock mit `order`, `limit`, `not.is.null` und fehlender Spalte |
+| `name-matching.mjs <url> [ausgabeordner]` (`W=390` für Handybreite) | Übernahme in Ligen: Schreibweise (Groß-/Kleinschreibung, Leerzeichen) automatisch, Verschreiber als Frage pro Liga mit Vorauswahl, verschiedene Antworten je Liga, nichts doppelt angelegt | zustandsbehafteter Mock |
 | `csp-e2e.mjs` | alle Seiten und Exporte laufen unter der echten CSP aus `vercel.json` | eigener kleiner Server mit den Headern aus `vercel.json`; startet ohne Argument (Port 4180) |
 
 Gemeinsame Bausteine:

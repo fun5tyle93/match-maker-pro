@@ -1,5 +1,12 @@
 import { League, PlayerStats } from '@/types';
 import { compareEternalRows, compareLeagueRows } from './ranking';
+import { findRowIndex } from './nameMatching';
+
+/** Confirmed matches of one league: name of the evening -> name of the player already in that league. */
+export type NameMatches = Map<string, string>;
+
+/** Confirmed matches per league (key: league id). */
+export type NameMatchesByLeague = Map<string, NameMatches>;
 
 /**
  * Adds the results of one evening or tournament to a league and returns the updated league.
@@ -12,20 +19,21 @@ import { compareEternalRows, compareLeagueRows } from './ranking';
  *
  * `stats` are the whole numbers of the evening (win 2, draw 1, loss 0). `firstPlace` / `secondPlace` are names, and
  * undefined when the place is not decided. `nameMatches` maps a name of the evening to the name already in the
- * league (confirmed in the transfer dialog); players are found by name, ignoring case.
+ * league (confirmed in the transfer dialog). Players are found by name, ignoring case, spacing, hyphens, umlauts and
+ * accents (see nameMatching.ts); with the same name twice in a league, the row with the most points is used.
  */
 export function applySessionToLeague(
   league: League,
   stats: PlayerStats[],
   firstPlace: string | undefined,
   secondPlace: string | undefined,
-  nameMatches: Map<string, string>,
+  nameMatches: NameMatches,
 ): League {
   const updatedStats = [...league.playerStats];
 
   stats.forEach(stat => {
     const searchName = nameMatches.get(stat.player.name) || stat.player.name;
-    const existingIndex = updatedStats.findIndex(s => s.player.name.toLowerCase() === searchName.toLowerCase());
+    const existingIndex = findRowIndex(updatedStats.map(s => ({ name: s.player.name, points: s.points })), searchName);
     const isChampion = stat.player.name === firstPlace;
     const isViceChampion = stat.player.name === secondPlace;
 
