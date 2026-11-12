@@ -68,13 +68,3 @@ export interface NameMatch {
   similarity: number;
   isExact: boolean;
 }
-
-export interface ChangeLogEntry {
-  id: string;
-  timestamp: string;
-  action: 'add' | 'edit' | 'delete';
-  playerName: string;
-  field?: string;
-  oldValue?: string | number;
-  newValue?: string | number;
-}

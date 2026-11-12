@@ -93,8 +93,9 @@ export function computeFinalSwissStats(s: SwissSession): {
 
   const stats = Array.from(acc.values());
 
-  let championName = swissStats[0]?.player.name;
-  let viceChampionName = swissStats[1]?.player.name;
+  // Either may stay undefined: fewer than two players, or a playoff final without a runner-up yet
+  let championName: string | undefined = swissStats[0]?.player.name;
+  let viceChampionName: string | undefined = swissStats[1]?.player.name;
 
   if (playoffMatches.length > 0) {
     const { champion, runnerUp } = getPlayoffFinalists(toPlayoffMatches(
