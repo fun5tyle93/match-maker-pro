@@ -255,7 +255,7 @@ Deshalb bekommt jeder Abend die Wertungsregel, nach der er gespielt wurde:
 - **Neue Spalte** `training_sessions.ranking_rule text` (6.8).
 - **Bestehende Abende:** Sie bekommen in der Migration `'legacy'`, das ist die bisherige Sortierung aus `calculatePlayerStats`. Sie wird unverändert als `rankLegacy` erhalten.
 - **Neue Abende:** Sie bekommen `'dtkv2026'`, über den Default der Spalte, und die App setzt den Wert zusätzlich ausdrücklich.
-- **Alle Stellen**, die eine Rangfolge eines Abends zeigen oder verwenden, wählen die Funktion nach `ranking_rule`. Eine rückwirkende Umstellung alter Abende ist eine Entscheidung des Nutzers (11.1) und **nicht** Teil dieses Schritts.
+- **Alle Stellen**, die eine Rangfolge eines Abends zeigen oder verwenden, wählen die Funktion nach `ranking_rule`. Der Nutzer hat am 12.11.2026 entschieden: **keine** rückwirkende Umstellung alter Abende.
 
 ### 6.4 Jahrestabellen: analog SO § 2 Abs. 6
 
@@ -704,19 +704,19 @@ Sie wird per `supabase.rpc('complete_session', …)` aufgerufen und ersetzt die 
 - **Freilos im Schiedsrichter-Modus:** Der Spieler mit Freilos ist in beiden Durchgängen der Runde Schiedsrichter (R8).
 - **Namen in den Jahrestabellen:** ausgeklammert. Die Ewige Tabelle wird im nächsten Schritt gemeinsam geprüft (Schritt D, Hinweis oben).
 
-### Ergänzte Regeln, die der Nutzer bestätigen soll
+### Ergänzte Regeln (vom Nutzer am 12.11.2026 bestätigt)
 
-Diese Regeln stehen nicht in der Spielordnung. Bis zur Bestätigung werden sie wie beschrieben umgesetzt.
+Diese Regeln stehen nicht in der Spielordnung und gelten verbindlich wie beschrieben:
 1. **Völliger Gleichstand um Platz 1 oder 2 am Abend:** Entscheidungsspiel oder -runde mit Sudden Death, ohne Wertung in Punkten und Toren (6.2).
 2. **Wertung im Schweizer System:** Punkte pro Spiel → Buchholz → Tordifferenz → geschossene Tore → direkter Vergleich → gespeichertes Los (6.6).
 3. **Ewige Tabelle:** Punkte → Meistertitel, danach gleiche Platzzahl (6.5).
+4. **Keine Rückwirkung:** Alte Abende bleiben `legacy`. Nur neue Abende werden nach DTKV gewertet (6.3).
 
 ### Noch offen
 
-1. **Rückwirkung:** Sollen vergangene Abende nach DTKV neu gewertet werden? Standard: nein, sie bleiben `legacy` (6.3). Bei einer Umstellung würden sich ein Tagessieg (Jugend 08.05.2026) und vier Vize ändern. Die bereits gezählten Titel in den Jahrestabellen müssten dann mit Begründung korrigiert werden.
-2. **Halbe Punkte nach Sudden Death** (§ 9 Abs. 6): Sie gelten laut SO nur für die Gesamtplatzierung der im Playoff Ausgeschiedenen und sind nicht umgesetzt. Soll die App sie für Swiss-Turniere ausweisen?
-3. **Alte Ungereimtheiten in den Ligen** (10.1): Bleiben sie (Standard, über den Startbestand) oder werden sie später über `league_adjustments` mit Begründung korrigiert?
-4. **Admin-Recht:** Heute ist jeder angemeldete Nutzer Admin (`isAdmin = !!user`). Das ist sicher, solange die Registrierung aus ist. Soll zusätzlich ein ausdrückliches Admin-Kennzeichen eingeführt werden, das auch die Datenbankregeln prüfen?
+1. **Halbe Punkte nach Sudden Death** (§ 9 Abs. 6): Sie gelten laut SO nur für die Gesamtplatzierung der im Playoff Ausgeschiedenen und sind nicht umgesetzt. Soll die App sie für Swiss-Turniere ausweisen?
+2. **Alte Ungereimtheiten in den Ligen** (10.1): Bleiben sie (Standard, über den Startbestand) oder werden sie später über `league_adjustments` mit Begründung korrigiert?
+3. **Admin-Recht:** Heute ist jeder angemeldete Nutzer Admin (`isAdmin = !!user`). Das ist sicher, solange die Registrierung aus ist. Soll zusätzlich ein ausdrückliches Admin-Kennzeichen eingeführt werden, das auch die Datenbankregeln prüfen?
 
 ---
 
