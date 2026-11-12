@@ -90,9 +90,18 @@ function playTournament(n: number, totalRounds: number, seed: number, referee: b
       const in2 = new Set(pass2.matches.flatMap(m => [m.homePlayer.id, m.awayPlayer.id]));
       if ([...in1].some(id => in2.has(id))) fail(r, 'a player plays in both passes');
       if (Math.abs(pass1.matches.length - pass2.matches.length) > 1) fail(r, 'passes differ by more than one match');
-      // The referees of a pass are the players of the other pass plus the player with the bye
-      const expectedRefs1 = [...in2, ...(byePlayerId ? [byePlayerId] : [])].sort();
-      const expectedRefs2 = [...in1, ...(byePlayerId ? [byePlayerId] : [])].sort();
+      // The player with the bye is free in exactly one pass (the one that carries byePlayerId) and referees in the other
+      const freeIn = [pass1, pass2].filter(p => p.byePlayerId);
+      if (byePlayerId) {
+        if (freeIn.length !== 1 || freeIn[0].byePlayerId !== byePlayerId) fail(r, 'the bye must be set on exactly one pass');
+        // the free pass is the one with fewer matches (or either, when they are equal)
+        const fewer = pass1.matches.length < pass2.matches.length ? pass1 : pass2.matches.length < pass1.matches.length ? pass2 : null;
+        if (fewer && freeIn[0] !== fewer) fail(r, 'the bye player is free in the pass with more matches');
+      } else if (freeIn.length > 0) fail(r, 'a pass has a bye although nobody has one');
+      const refereesOfPass = (pass: SwissRound, otherPlayers: Set<string>) =>
+        [...otherPlayers, ...(byePlayerId && !pass.byePlayerId ? [byePlayerId] : [])].sort();
+      const expectedRefs1 = refereesOfPass(pass1, in2);
+      const expectedRefs2 = refereesOfPass(pass2, in1);
       if (JSON.stringify([...(pass1.referees ?? [])].sort()) !== JSON.stringify(expectedRefs1)) fail(r, 'referees of pass 1 are wrong');
       if (JSON.stringify([...(pass2.referees ?? [])].sort()) !== JSON.stringify(expectedRefs2)) fail(r, 'referees of pass 2 are wrong');
       if ((pass1.referees ?? []).some(id => in1.has(id))) fail(r, 'a player referees his own pass');
@@ -207,7 +216,7 @@ describe('referee mode (two passes per round)', () => {
   for (let n = 4; n <= 14; n++) {
     const rounds = Math.min(10, maxSwissRounds(n));
     const tournaments = n <= 9 ? 100 : 25;
-    it(`${n} players, ${rounds} rounds (${tournaments} tournaments): nobody plays in both passes, referees are the other pass plus the bye`, () => {
+    it(`${n} players, ${rounds} rounds (${tournaments} tournaments): nobody plays in both passes, referees are the other pass, the bye player referees only where he is not free`, () => {
       for (let t = 0; t < tournaments; t++) {
         const { violations } = playTournament(n, rounds, 5000 + 100 * n + t, true);
         expect(violations, `n=${n} seed=${5000 + 100 * n + t}`).toEqual([]);
@@ -215,16 +224,40 @@ describe('referee mode (two passes per round)', () => {
     });
   }
 
-  it('the player with the bye is a referee in both passes and plays in none', () => {
-    const players = makePlayers(7);
-    const { pass1, pass2, byePlayerId } = generateRefereeRound(players, [], 1, 3, mulberry32(3));
-    expect(byePlayerId).toBeDefined();
-    expect(pass1.referees).toContain(byePlayerId);
-    expect(pass2.referees).toContain(byePlayerId);
-    expect(pass1.byePlayerId).toBe(byePlayerId);
-    const playing = [...pass1.matches, ...pass2.matches].flatMap(m => [m.homePlayer.id, m.awayPlayer.id]);
-    expect(playing).not.toContain(byePlayerId);
-    expect(playing).toHaveLength(6);
+  it('the player with the bye is free in one pass and referees in the other, and plays in none', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const players = makePlayers(7);
+      const { pass1, pass2, byePlayerId } = generateRefereeRound(players, [], 1, 3, mulberry32(seed));
+      expect(byePlayerId).toBeDefined();
+      // exactly one pass carries the bye ("Spielfrei"); he is not a referee there, but in the other pass
+      const freePass = [pass1, pass2].filter(p => p.byePlayerId === byePlayerId);
+      expect(freePass).toHaveLength(1);
+      const refereePass = freePass[0] === pass1 ? pass2 : pass1;
+      expect(freePass[0].referees).not.toContain(byePlayerId);
+      expect(refereePass.referees).toContain(byePlayerId);
+      expect(refereePass.byePlayerId).toBeUndefined();
+      const playing = [...pass1.matches, ...pass2.matches].flatMap(m => [m.homePlayer.id, m.awayPlayer.id]);
+      expect(playing).not.toContain(byePlayerId);
+      expect(playing).toHaveLength(6);
+    }
+  });
+
+  it('seven players: the bye player is free in the pass with one match and referees the pass with two (3 and 4 referees)', () => {
+    const { pass1, pass2, byePlayerId } = generateRefereeRound(makePlayers(7), [], 1, 3, mulberry32(8));
+    expect([pass1.matches.length, pass2.matches.length]).toEqual([2, 1]);
+    expect(pass2.byePlayerId).toBe(byePlayerId);              // free in the pass with fewer matches
+    expect(pass1.byePlayerId).toBeUndefined();
+    expect(pass1.referees).toHaveLength(3);                   // the 2 players of pass 2 plus the bye player
+    expect(pass2.referees).toHaveLength(4);                   // the 4 players of pass 1
+  });
+
+  it('with equal passes the free pass is drawn: both passes occur', () => {
+    const freePasses = new Set<number>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const { pass1 } = generateRefereeRound(makePlayers(5), [], 1, 3, mulberry32(seed));   // 2 matches: 1 and 1
+      freePasses.add(pass1.byePlayerId ? 1 : 2);
+    }
+    expect([...freePasses].sort()).toEqual([1, 2]);
   });
 
   it('six players (which used to fail in round 1) are drawn: passes of 2 and 1 matches', () => {

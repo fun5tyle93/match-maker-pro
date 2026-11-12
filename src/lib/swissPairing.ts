@@ -222,8 +222,12 @@ export function generateSwissRoundMatches(
 /**
  * Referee mode: the whole round is drawn like a normal round, then the matches are spread over two passes in a
  * zigzag by rank (best match in pass 1, next in pass 2, ...). The referees of a pass are the players who play in the
- * other pass, plus the player who has the bye (he does not play this round, so he can referee in both passes).
- * The passes may differ by one match.
+ * other pass. The passes may differ by one match.
+ *
+ * The player with the bye does not play this round. He is free in one pass (shown as "Spielfrei" there, he does
+ * nothing in it) and referees in the other one. The free pass is the one with fewer matches: it needs fewer
+ * referees, so the bye player is a referee where the referees are scarcer. With equal passes it is drawn.
+ * `byePlayerId` is set on the pass in which he is free.
  */
 export function generateRefereeRound(
   players: Player[],
@@ -239,24 +243,29 @@ export function generateRefereeRound(
   const playersOf = (ms: Match[]) => ms.flatMap(m => [m.homePlayer.id, m.awayPlayer.id]);
   const matches1 = matchesOf(0);
   const matches2 = matchesOf(1);
-  const withBye = (ids: string[]) => (byePlayerId ? [...ids, byePlayerId] : ids);
+
+  // The pass in which the player with the bye is free (the other one he referees)
+  const freePass: 1 | 2 = matches1.length > matches2.length ? 2 : matches1.length < matches2.length ? 1 : (rng() < 0.5 ? 1 : 2);
+  const refereesOf = (pass: 1 | 2, otherPassMatches: Match[]) =>
+    byePlayerId && pass !== freePass ? [...playersOf(otherPassMatches), byePlayerId] : playersOf(otherPassMatches);
 
   const pass1: SwissRound = {
     roundNumber: targetRound,
     phase: 'referee',
     pass: 1,
     matches: matches1,
-    referees: withBye(playersOf(matches2)),
+    referees: refereesOf(1, matches2),
     isCompleted: false,
-    byePlayerId,
+    byePlayerId: byePlayerId && freePass === 1 ? byePlayerId : undefined,
   };
   const pass2: SwissRound = {
     roundNumber: targetRound,
     phase: 'referee',
     pass: 2,
     matches: matches2,
-    referees: withBye(playersOf(matches1)),
+    referees: refereesOf(2, matches1),
     isCompleted: false,
+    byePlayerId: byePlayerId && freePass === 2 ? byePlayerId : undefined,
   };
   return { pass1, pass2, byePlayerId };
 }

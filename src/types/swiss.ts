@@ -42,7 +42,7 @@ export interface SwissRound {
   /** Player IDs acting as referees this pass (refereeMode only) */
   referees?: string[];
   isCompleted: boolean;
-  /** Player ID that has a BYE this round */
+  /** Player ID that has a BYE this round. In referee mode: set on the pass in which he is free (he referees the other). */
   byePlayerId?: string;
 }
 

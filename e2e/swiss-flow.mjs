@@ -180,7 +180,7 @@ const sessionRow = (state, over = {}) => ({ id: state.id, name: null, date: stat
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. Referee mode with seven players (odd): two passes, the player with the bye referees in both
+// 2. Referee mode with seven players (odd): two passes, the player with the bye is free in one pass and referees in the other
 // ─────────────────────────────────────────────────────────────────────────────
 {
   const tables = baseTables();
@@ -202,8 +202,16 @@ const sessionRow = (state, over = {}) => ({ id: state.id, name: null, date: stat
   const byeText = await page.locator('text=/^Spielfrei:/').locator('xpath=..').first().innerText();
   const bye = names.find(n => byeText.includes(n));
   check('Ein Spieler hat Freilos', !!bye, byeText);
-  check('Der Spieler mit Freilos ist Schiedsrichter in beiden Durchgängen', lists.every(l => l.includes(bye)), JSON.stringify({ bye, lists }));
-  check('Durchgänge: 2 und 1 Spiele, Schiedsrichter 3 und 5 (die anderen plus das Freilos)', JSON.stringify(lists.map(l => l.length).sort()) === JSON.stringify([3, 5]), JSON.stringify(lists.map(l => l.length)));
+  check('Der Spieler mit Freilos ist Schiedsrichter in genau einem Durchgang, im anderen hat er frei', lists.filter(l => l.includes(bye)).length === 1, JSON.stringify({ bye, lists }));
+  check('Durchgänge: 2 und 1 Spiele, Schiedsrichter 3 und 4 (der Freilos-Spieler hilft im Durchgang mit mehr Spielen)', JSON.stringify(lists.map(l => l.length).sort()) === JSON.stringify([3, 4]), JSON.stringify(lists.map(l => l.length)));
+  await page.waitForTimeout(800);
+  // in the stored tournament: the pass that carries the bye ("Spielfrei") is the one he does not referee, and it has fewer matches
+  const stored = tables.training_sessions[0]?.swiss_state?.rounds ?? [];
+  const freePass = stored.filter(r => r.byePlayerId);
+  const refereePass = stored.filter(r => !r.byePlayerId);
+  const byeId = freePass[0]?.byePlayerId;
+  check('Gespeichert: genau ein Durchgang trägt das Freilos, dort ist der Spieler nicht Schiedsrichter', freePass.length === 1 && !freePass[0].referees.includes(byeId) && refereePass[0]?.referees.includes(byeId), JSON.stringify(stored.map(r => [r.pass, r.byePlayerId, r.referees])));
+  check('Gespeichert: frei ist er im Durchgang mit weniger Spielen (1 gegen 2)', freePass[0]?.matches.length === 1 && refereePass[0]?.matches.length === 2);
   const matchesInDb = () => tables.matches.filter(m => m.phase === 'swiss');
   await page.waitForTimeout(800);
   check('Die 3 Spiele der Runde stehen in der Datenbank, der Freilos-Spieler spielt nicht', matchesInDb().length === 3 && !matchesInDb().some(m => m.home_player_name === bye || m.away_player_name === bye), JSON.stringify(matchesInDb().map(m => [m.home_player_name, m.away_player_name])));
