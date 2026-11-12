@@ -1,6 +1,8 @@
 import type { CellObject, SheetData } from 'write-excel-file/browser';
 import { League, Match, TrainingSession } from '@/types';
-import { calculatePlayerStats } from './pairingGenerator';
+import { placesFor, sortRows } from './ranking';
+import { rankSession, sessionFinalRanking } from './swissRanking';
+import { OUT_IN_LABEL } from './finalRankingText';
 import { groupMatchesByRound, pausingPlayers } from './tables';
 import { getSwissMatches, toPlayoffMatches, playoffMatchWinner } from './tournamentPhases';
 import { getRoundName } from './swissPairing';
@@ -109,14 +111,15 @@ export function buildTrainingSheets(session: TrainingSession): XlsxSheet[] {
   const groupMatches = getSwissMatches(session.matches);
   const playoffMatches = toPlayoffMatches(session.matches);
   const hasPlayoff = playoffMatches.length > 0;
-  const stats = calculatePlayerStats(session.players, groupMatches);
+  const ranked = rankSession(session);
+  const stats = ranked.stats;
 
   // ---- Standings ----
   const standings: SheetData = [
     ['Platz', 'Spieler', 'Punkte', 'Tore', 'Diff'].map(header),
     ...stats.map((s, index) => {
       const zebra = index % 2 === 1;
-      const rank = index + 1;
+      const rank = ranked.places[index];
       return [
         number(rank, { zebra, bold: rank <= 3, color: rankColor(rank) }),
         text(s.player.name, { zebra }),
@@ -187,7 +190,7 @@ export function buildTrainingSheets(session: TrainingSession): XlsxSheet[] {
           text(getRoundName(m.round), { zebra }),
           number(m.matchNumber, { zebra }),
           text(m.homePlayer?.name ?? 'TBD', { zebra, bold: winner === 'home' }),
-          text(m.isBye ? 'Freilos' : resultText(m), { zebra, align: 'center', bold: true }),
+          text(m.isBye ? 'Freilos' : `${resultText(m)}${m.isCompleted && m.suddenDeath ? ' SD' : ''}`, { zebra, align: 'center', bold: true }),
           text(m.awayPlayer?.name ?? (m.isBye ? '' : 'TBD'), { zebra, bold: winner === 'away' }),
           text(playoffMatchWinner(m)?.name ?? '', { zebra, bold: true }),
         ];
@@ -199,6 +202,30 @@ export function buildTrainingSheets(session: TrainingSession): XlsxSheet[] {
       data: playoffRows,
       ...layout([{ width: 16 }, { width: 8 }, { width: widthFor(names, 16, 34) }, { width: 11 }, { width: widthFor(names, 16, 34) }, { width: widthFor(names, 16, 34) }]),
     });
+
+    // Final ranking of a Swiss tournament (SO § 9 Abs. 6): Swiss points plus playoff points, by round of elimination
+    const finalRows = sessionFinalRanking(session);
+    if (finalRows) {
+      const finalSheet: SheetData = [
+        ['Platz', 'Spieler', 'Ausgeschieden in', 'Punkte', 'davon Playoff', 'Diff'].map(header),
+        ...finalRows.map((r, index) => {
+          const zebra = index % 2 === 1;
+          return [
+            number(r.place, { zebra, bold: r.place <= 3, color: rankColor(r.place) }),
+            text(r.player.name, { zebra }),
+            text(OUT_IN_LABEL[r.outIn], { zebra }),
+            number(r.points, { zebra, format: '0.0', bold: true }),
+            number(r.playoffPoints, { zebra, format: '0.0' }),
+            number(r.goalDifference, { zebra, format: SIGNED, bold: r.goalDifference !== 0, color: diffColor(r.goalDifference) }),
+          ];
+        }),
+      ];
+      sheets.push({
+        sheet: 'Abschlussrangliste',
+        data: finalSheet,
+        ...layout([{ width: 8 }, { width: widthFor(finalRows.map(r => r.player.name), 16, 34) }, { width: 20 }, { width: 10 }, { width: 14 }, { width: 8 }]),
+      });
+    }
   }
 
   return sheets;
@@ -206,11 +233,14 @@ export function buildTrainingSheets(session: TrainingSession): XlsxSheet[] {
 
 /** Sheet of a league table. */
 export function buildLeagueSheets(league: League): XlsxSheet[] {
+  // Same order as in the app; rows that are level share a place
+  const leagueRows = sortRows(league.playerStats, !!league.isEternal);
+  const places = placesFor(leagueRows, !!league.isEternal);
   const rows: SheetData = [
     ['Platz', 'Spieler', 'Spiele', 'Punkte', 'Tore', 'Diff', 'M', 'VM', '∅ Pkt/Spiel'].map(header),
-    ...league.playerStats.map((s, index) => {
+    ...leagueRows.map((s, index) => {
       const zebra = index % 2 === 1;
-      const rank = index + 1;
+      const rank = places[index];
       const totalPoints = s.points + s.pointsAgainst;
       const games = Math.floor(totalPoints / 2);
       const average = totalPoints > 0 ? Math.round((s.points / totalPoints) * 2 * 100) / 100 : 0;

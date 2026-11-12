@@ -13,6 +13,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { PlayerStats } from '@/types';
+import { placesFor, sortRows } from '@/lib/ranking';
 import { cn } from '@/lib/utils';
 
 interface EternalLeagueTableProps {
@@ -38,10 +39,8 @@ export function EternalLeagueTable({ stats, isAdmin, onEdit, onDelete }: Eternal
   };
 
   // Sort by points desc, then championships desc
-  const sorted = [...stats].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    return (b.championships ?? 0) - (a.championships ?? 0);
-  });
+  const sorted = sortRows(stats, true);
+  const places = placesFor(sorted, true);
 
   return (
     <Card className="animate-fade-in border-accent/30 bg-gradient-to-b from-accent/5 to-transparent">
@@ -74,20 +73,20 @@ export function EternalLeagueTable({ stats, isAdmin, onEdit, onDelete }: Eternal
                     key={stat.player.id}
                     className={cn(
                       'border-b border-border/50 transition-colors hover:bg-secondary/50',
-                      getRankBg(index + 1),
+                      getRankBg(places[index]),
                       'animate-slide-up'
                     )}
                     style={{ animationDelay: `${index * 20}ms` }}
                   >
-                    <td className={cn('py-2 px-2 font-display text-base font-bold', getRankColor(index + 1))}>
-                      {index + 1}
+                    <td className={cn('py-2 px-2 font-display text-base font-bold', getRankColor(places[index]))}>
+                      {places[index]}
                     </td>
                     <td className="py-2 px-2">
                       <span className={cn(
                         'font-semibold',
-                        index === 0 && 'text-gold',
-                        index === 1 && 'text-silver',
-                        index === 2 && 'text-bronze',
+                        places[index] === 1 && 'text-gold',
+                        places[index] === 2 && 'text-silver',
+                        places[index] === 3 && 'text-bronze',
                       )}>
                         {stat.player.name}
                       </span>

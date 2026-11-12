@@ -33,6 +33,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { League, PlayerStats, Player } from '@/types';
 import { loadLeagues, saveLeague, deleteLeague } from '@/lib/storage';
+import { compareLeagueRows, placesFor } from '@/lib/ranking';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportActions';
 import { cn } from '@/lib/utils';
@@ -179,11 +180,7 @@ const Leagues = () => {
       return s;
     });
 
-    updatedStats.sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
-      return b.goalsFor - a.goalsFor;
-    });
+    updatedStats.sort(compareLeagueRows);
 
     const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
     const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
@@ -249,6 +246,9 @@ const Leagues = () => {
       day: 'numeric',
     });
   };
+
+  // Rows that are level share a place
+  const leaguePlaces = selectedLeague ? placesFor(selectedLeague.playerStats, !!selectedLeague.isEternal) : [];
 
   const getRankColor = (rank: number) => {
     if (rank === 1) return "text-gold";
@@ -486,18 +486,20 @@ const Leagues = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {selectedLeague.playerStats.map((stat, index) => (
+                            {selectedLeague.playerStats.map((stat, index) => {
+                              const place = leaguePlaces[index];
+                              return (
                               <tr
                                 key={stat.player.id}
                                 className={cn(
                                   "border-b border-border/50 transition-colors hover:bg-secondary/50",
-                                  getRankBg(index + 1),
+                                  getRankBg(place),
                                   "animate-slide-up"
                                 )}
                                 style={{ animationDelay: `${index * 50}ms` }}
                               >
-                                <td className={cn("py-3 px-2 font-display text-lg", getRankColor(index + 1))}>
-                                  {index + 1}
+                                <td className={cn("py-3 px-2 font-display text-lg", getRankColor(place))}>
+                                  {place}
                                 </td>
                                 <td className="py-3 px-2">
                                   <span className="font-semibold">{stat.player.name}</span>
@@ -575,7 +577,8 @@ const Leagues = () => {
                                   )}
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>

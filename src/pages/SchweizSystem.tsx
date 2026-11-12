@@ -30,6 +30,9 @@ import {
   computeSwissStats, generateSwissRoundMatches, generateRefereeRound,
   generatePlayoff, advancePlayoffBracket, getPlayoffWinner, getRoundName,
 } from '@/lib/swissPairing';
+import { playoffResultError } from '@/lib/tournamentPhases';
+import { sessionFinalRanking } from '@/lib/swissRanking';
+import { FinalRankingTable } from '@/components/FinalRankingTable';
 import { useAuth } from '@/contexts/AuthContext';
 import { loadLeagues, saveLeague } from '@/lib/storage';
 import { cn } from '@/lib/utils';
@@ -138,6 +141,8 @@ export default function SchweizSystem() {
       rounds: [],
       currentRound: 0,
       isCompleted: false,
+      // The lot is drawn once and kept with the tournament: last criterion of the standings (docs/UMSETZUNGSPLAN.md 6.6)
+      lot: Object.fromEntries(initializedPlayers.map(p => [p.id, Math.random()])),
     };
 
     // Generate round 1
@@ -253,7 +258,7 @@ export default function SchweizSystem() {
 
   const handleStartPlayoff = () => {
     if (!session) return;
-    const stats = computeSwissStats(session.players, session.rounds);
+    const stats = computeSwissStats(session.players, session.rounds, session.lot);
     const playoffMatches = generatePlayoff(
       stats,
       session.config.playoffFormat ?? 'standard',
@@ -265,10 +270,13 @@ export default function SchweizSystem() {
     toast.success('Playoff-Phase gestartet!');
   };
 
-  const handleUpdatePlayoffScore = (matchId: string, homeScore: number, awayScore: number) => {
+  const handleUpdatePlayoffScore = (matchId: string, homeScore: number, awayScore: number, suddenDeath: boolean) => {
     if (!session?.playoffMatches) return;
+    // A knock-out game has no draw; the card checks this too, this keeps other callers honest
+    const error = playoffResultError(homeScore, awayScore, suddenDeath);
+    if (error) { toast.error(error); return; }
     const updated = session.playoffMatches.map(m =>
-      m.id === matchId ? { ...m, homeScore, awayScore, isCompleted: true } : m
+      m.id === matchId ? { ...m, homeScore, awayScore, isCompleted: true, suddenDeath } : m
     );
     const advanced = advancePlayoffBracket(updated);
     setSession(prev => prev ? { ...prev, playoffMatches: advanced } : prev);
@@ -408,7 +416,7 @@ export default function SchweizSystem() {
 
   // ─── Derived state ────────────────────────────────────────────────────
 
-  const stats = session ? computeSwissStats(session.players, session.rounds) : [];
+  const stats = session ? computeSwissStats(session.players, session.rounds, session.lot) : [];
 
   const currentRoundData = session?.rounds.filter(r => r.roundNumber === session.currentRound) ?? [];
   const currentRoundComplete = currentRoundData.length > 0 && currentRoundData.every(r => r.isCompleted);
@@ -416,6 +424,9 @@ export default function SchweizSystem() {
 
   const playoffFinalMatch = session?.playoffMatches?.find(m => m.round === 1);
   const playoffChampion = playoffFinalMatch ? getPlayoffWinner(playoffFinalMatch) : null;
+
+  // Final ranking (SO § 9 Abs. 6) once the final is decided
+  const finalRanking = session && playoffChampion ? sessionFinalRanking(convertSwissToTrainingSession(session)) : null;
 
   // Transfer stats: finale Ergebnisse (Vorrunde + Playoff)
   const transferStats = session ? computeFinalSwissStats(session).stats : [];
@@ -858,6 +869,11 @@ export default function SchweizSystem() {
                     onUpdateScore={handleUpdatePlayoffScore}
                     readonly={!isAdmin}
                   />
+                  {finalRanking && (
+                    <div className="mt-4">
+                      <FinalRankingTable rows={finalRanking} />
+                    </div>
+                  )}
                   {isAdmin && playoffChampion && (
                     <div className="mt-4">
                       <Button variant="accent" size="lg" className="w-full gap-2" onClick={handleCompleteSession}>

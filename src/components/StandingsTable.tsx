@@ -6,9 +6,15 @@ import { cn } from '@/lib/utils';
 interface StandingsTableProps {
   stats: PlayerStats[];
   title?: string;
+  /** places[i] is the place of stats[i]; players that are level share a place. Default: 1, 2, 3 ... */
+  places?: number[];
+  /** Shows the tie-break note (evenings played under the DTKV rule) */
+  dtkvNote?: boolean;
 }
 
-export function StandingsTable({ stats, title = "Tabelle" }: StandingsTableProps) {
+export function StandingsTable({ stats, title = "Tabelle", places, dtkvNote = false }: StandingsTableProps) {
+  const placeOf = (index: number) => places?.[index] ?? index + 1;
+  const hasTie = stats.some((_, i) => i > 0 && placeOf(i) === placeOf(i - 1));
   const getRankColor = (rank: number) => {
     if (rank === 1) return "text-gold";
     if (rank === 2) return "text-silver";
@@ -54,13 +60,13 @@ export function StandingsTable({ stats, title = "Tabelle" }: StandingsTableProps
                     key={stat.player.id}
                     className={cn(
                       "border-b border-border/50 transition-colors hover:bg-secondary/50",
-                      getRankBg(index + 1),
+                      getRankBg(placeOf(index)),
                       "animate-slide-up"
                     )}
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    <td className={cn("py-3 px-2 font-display text-lg", getRankColor(index + 1))}>
-                      {index + 1}
+                    <td className={cn("py-3 px-2 font-display text-lg", getRankColor(placeOf(index)))}>
+                      {placeOf(index)}
                     </td>
                     <td className="py-3 px-2">
                       <span className="font-semibold">{stat.player.name}</span>
@@ -87,6 +93,16 @@ export function StandingsTable({ stats, title = "Tabelle" }: StandingsTableProps
                 ))}
               </tbody>
             </table>
+            {hasTie && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Gleiche Platzzahl: gleichauf, auch nach allen Wertungskriterien.
+              </p>
+            )}
+            {dtkvNote && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Bei Punktgleichheit: direkter Vergleich, dann Tordifferenz und Tore (DTKV-Spielordnung § 8 Abs. 3).
+              </p>
+            )}
           </div>
         )}
       </CardContent>

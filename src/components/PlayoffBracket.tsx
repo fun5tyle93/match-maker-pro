@@ -6,10 +6,13 @@ import { getRoundName, getPlayoffWinner } from '@/lib/swissPairing';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { playoffResultError } from '@/lib/tournamentPhases';
 
 interface PlayoffBracketProps {
   matches: PlayoffMatch[];
-  onUpdateScore?: (matchId: string, homeScore: number, awayScore: number) => void;
+  /** suddenDeath: the game was decided by sudden death (counts 1.5 / 0.5 points in the final ranking) */
+  onUpdateScore?: (matchId: string, homeScore: number, awayScore: number, suddenDeath: boolean) => void;
   readonly?: boolean;
 }
 
@@ -61,11 +64,12 @@ function BracketMatchCard({
   readonly,
 }: {
   match: PlayoffMatch;
-  onUpdateScore?: (id: string, h: number, a: number) => void;
+  onUpdateScore?: (id: string, h: number, a: number, suddenDeath: boolean) => void;
   readonly?: boolean;
 }) {
   const [editHome, setEditHome] = useState('');
   const [editAway, setEditAway] = useState('');
+  const [editSd, setEditSd] = useState(false);
   const [editing, setEditing] = useState(false);
 
   const winner = getPlayoffWinner(match);
@@ -74,14 +78,17 @@ function BracketMatchCard({
   const handleSave = () => {
     const h = parseInt(editHome);
     const a = parseInt(editAway);
-    if (!isNaN(h) && !isNaN(a) && h >= 0 && a >= 0 && onUpdateScore) {
-      onUpdateScore(match.id, h, a);
+    if (!isNaN(h) && !isNaN(a) && !error && onUpdateScore) {
+      onUpdateScore(match.id, h, a, editSd);
       setEditing(false);
     }
   };
 
-  const isValid = editHome !== '' && editAway !== '' &&
+  const bothEntered = editHome !== '' && editAway !== '' &&
     !isNaN(parseInt(editHome)) && !isNaN(parseInt(editAway));
+  // A knock-out game has no draw; a sudden-death game is won by exactly one goal (SO § 9 Abs. 1 und 2)
+  const error = bothEntered ? playoffResultError(parseInt(editHome), parseInt(editAway), editSd) : null;
+  const isValid = bothEntered && !error;
 
   if (match.isBye) {
     const byePlayer = match.homePlayer ?? match.awayPlayer;
@@ -153,6 +160,27 @@ function BracketMatchCard({
         )}
       </div>
 
+      {match.isCompleted && !editing && match.suddenDeath && (
+        <div className="px-3 py-1 border-t border-border/50 text-[11px] text-muted-foreground text-center">
+          Sudden Death
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="px-3 py-2 border-t border-border/50 space-y-1">
+          <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>Durch Sudden Death entschieden</span>
+            <Switch checked={editSd} onCheckedChange={setEditSd} aria-label="Durch Sudden Death entschieden" />
+          </label>
+          {match.round === 1 && (
+            <p className="text-[11px] text-muted-foreground">
+              Finale: erst Verlängerung (2 × 2 Min.), dann Neuansetzung, dann Sudden Death.
+            </p>
+          )}
+          {error && <p role="alert" className="text-[11px] text-destructive">{error}</p>}
+        </div>
+      )}
+
       {/* Actions */}
       {canEdit && (
         <div className="flex gap-1 p-2 border-t border-border/50">
@@ -169,7 +197,7 @@ function BracketMatchCard({
       {!readonly && match.isCompleted && !editing && !match.isBye && (
         <div className="p-2 border-t border-border/50">
           <Button size="sm" variant="ghost" className="w-full h-7 text-xs text-muted-foreground"
-            onClick={() => { setEditHome(match.homeScore?.toString() ?? ''); setEditAway(match.awayScore?.toString() ?? ''); setEditing(true); }}>
+            onClick={() => { setEditHome(match.homeScore?.toString() ?? ''); setEditAway(match.awayScore?.toString() ?? ''); setEditSd(!!match.suddenDeath); setEditing(true); }}>
             Korrigieren
           </Button>
         </div>

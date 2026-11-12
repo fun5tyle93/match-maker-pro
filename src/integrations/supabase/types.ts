@@ -77,6 +77,7 @@ export type Database = {
           playoff_round: number | null
           round: number
           session_id: string
+          sudden_death: boolean
           table_number: number | null
         }
         Insert: {
@@ -94,6 +95,7 @@ export type Database = {
           playoff_round?: number | null
           round: number
           session_id: string
+          sudden_death?: boolean
           table_number?: number | null
         }
         Update: {
@@ -111,6 +113,8 @@ export type Database = {
           playoff_round?: number | null
           round?: number
           session_id?: string
+          sudden_death?: boolean
+          table_number?: number | null
         }
         Relationships: [
           {
@@ -213,30 +217,36 @@ export type Database = {
       training_sessions: {
         Row: {
           date: string
+          decider_results: Json | null
           id: string
           is_completed: boolean
           matches_per_pairing: number
           name: string | null
+          ranking_rule: string
           round_count: number
           tournament_type: string
           transferred_to_leagues: string[] | null
         }
         Insert: {
           date?: string
+          decider_results?: Json | null
           id?: string
           is_completed?: boolean
           matches_per_pairing?: number
           name?: string | null
+          ranking_rule?: string
           round_count?: number
           tournament_type?: string
           transferred_to_leagues?: string[] | null
         }
         Update: {
           date?: string
+          decider_results?: Json | null
           id?: string
           is_completed?: boolean
           matches_per_pairing?: number
           name?: string | null
+          ranking_rule?: string
           round_count?: number
           tournament_type?: string
           transferred_to_leagues?: string[] | null
