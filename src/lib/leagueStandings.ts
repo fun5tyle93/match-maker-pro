@@ -10,7 +10,7 @@ import { League, Player, PlayerStats, TrainingSession } from '@/types';
 import { applySessionToLeague } from './leagueTransfer';
 import { sameName } from './nameMatching';
 import { rankSession } from './swissRanking';
-import { winnerAndRunnerUp } from './ranking';
+import { leagueTitleHolders } from './ranking';
 
 /** Evening results as they are booked into a league: everybody's numbers, and who won / came second. */
 export interface SessionResult {
@@ -21,14 +21,14 @@ export interface SessionResult {
 
 /**
  * The booking of one evening, as the transfer does it: training evenings by the rule they were played under.
- * A place that is shared (a tie that was not decided) gives no title.
+ * A place that is shared (a tie that was not decided) gives no title; players out of competition ("a.K.") get none.
  */
 export function sessionResult(session: TrainingSession): SessionResult {
   if (session.tournamentType === 'swiss') {
     throw new Error(`Schweizer Turnier "${session.name ?? session.id}": Beitrag noch nicht umgesetzt`);
   }
   const ranked = rankSession(session);
-  const { winner, runnerUp } = winnerAndRunnerUp(ranked);
+  const { winner, runnerUp } = leagueTitleHolders(ranked);
   return { stats: ranked.stats, firstPlace: winner?.name, secondPlace: runnerUp?.name };
 }
 

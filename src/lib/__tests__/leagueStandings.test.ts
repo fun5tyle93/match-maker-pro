@@ -29,6 +29,24 @@ describe('sessionResult', () => {
     expect(by(r.stats, 'Anna')).toMatchObject({ wins: 2, points: 4, goalsFor: 5, goalsAgainst: 1 });
   });
 
+  it('gives the titles of a player out of competition to the next players', () => {
+    const base = evening('ak', '2026-03-01T18:00:00Z');
+    const renamed = (name: string) => (p: { id: string; name: string; ref?: string }) => (p.name === 'Anna' ? { ...p, name } : p);
+    const session: TrainingSession = {
+      ...base,
+      players: base.players.map(renamed('Anna a.K.')),
+      matches: base.matches.map(m => ({ ...m, homePlayer: renamed('Anna a.K.')(m.homePlayer), awayPlayer: renamed('Anna a.K.')(m.awayPlayer) })),
+    };
+    const r = sessionResult(session);
+    expect(r.firstPlace).toBe('Ben');
+    expect(r.secondPlace).toBe('Cem');
+    // the player out of competition still gets the games, points and goals
+    expect(by(r.stats, 'Anna a.K.')).toMatchObject({ wins: 2, points: 4 });
+    const booked = bookSessions(false, [session]);
+    expect(by(booked, 'Anna a.K.')).toMatchObject({ championships: 0, viceChampionships: 0, points: 4 });
+    expect(by(booked, 'Ben').championships).toBe(1);
+  });
+
   it('refuses a Swiss tournament until its contribution is implemented', () => {
     expect(() => sessionResult(evening('s', '2026-03-01T18:00:00Z', { tournamentType: 'swiss' }))).toThrow(/noch nicht umgesetzt/);
   });

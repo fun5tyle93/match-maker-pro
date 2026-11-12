@@ -259,6 +259,26 @@ export function winnerAndRunnerUp(ranked: Ranked): { winner?: Player; runnerUp?:
   return { winner, runnerUp };
 }
 
+/**
+ * "Außer Konkurrenz": a player whose name ends in "a.K." takes part but can never win a league title
+ * (decision of the club, 13.11.2026). The name is the only marker there is.
+ */
+export const isOutOfCompetition = (name: string) => /(^|\s)a\.?\s?k\.?$/i.test(name.trim());
+
+/**
+ * Champion and runner-up for the league tables: like winnerAndRunnerUp, but players out of competition are
+ * skipped, so the next player moves up. A place that is shared still gives no title.
+ */
+export function leagueTitleHolders(ranked: Ranked): { winner?: Player; runnerUp?: Player } {
+  const eligible = ranked.stats
+    .map((s, i) => ({ player: s.player, place: ranked.places[i] }))
+    .filter(e => !isOutOfCompetition(e.player.name));
+  const [first, second, third] = eligible;
+  const winner = first && second?.place !== first.place ? first.player : undefined;
+  const runnerUp = winner && second && third?.place !== second.place ? second.player : undefined;
+  return { winner, runnerUp };
+}
+
 // ─── League tables ─────────────────────────────────────────────────────────
 
 /**

@@ -669,6 +669,8 @@ Die Namensspalten (`player_name`, `home_player_name` …) bleiben und werden wei
 
 ## 10. Schritt E: Ligen aus den Abenden berechnen (später)
 
+> **Stand 13.11.2026:** Der Nutzer will von E nur die **Prüfung „berechnet gleich gespeichert“** (siehe 11). Die Umstellung, `complete_session` und der Dual-Write unten sind nicht beschlossen. Fertig ist die Rechengrundlage (`src/lib/leagueStandings.ts`, `scripts/opening-balances.script.ts`); der Startbestand je Liga ist an den Backup-Daten berechnet und im privaten Backup-Repository abgelegt (`ligen/`).
+
 **Branch:** `feat/derived-leagues`. Erst nach D.
 
 ### 10.1 Problem
@@ -776,6 +778,8 @@ Sie wird per `supabase.rpc('complete_session', …)` aufgerufen und ersetzt die 
 - **Freilos im Schiedsrichter-Modus:** Der Spieler mit Freilos ist in einem Durchgang frei und im anderen Schiedsrichter (R8, Entscheidung vom 13.11.2026).
 - **Halbe Punkte nach Sudden Death:** werden umgesetzt, für die Abschlussrangliste im Schweizer System nach SO § 9 Abs. 6 (6.7, 6.8). Die Punkte sind Vorrunde plus Playoff, die halben Punkte sind nur die Zählformel für Sudden-Death-Spiele. Die Liga-Übertragung bleibt ganzzahlig.
 - **Playoff:** Pro Paarung gibt es immer genau ein Spiel, keine Best-of-Varianten.
+- **„Außer Konkurrenz“ (a.K.):** Ein Spieler, dessen Name auf „a.K.“ endet, spielt mit, bekommt Spiele, Punkte und Tore, aber nie einen Meister- oder Vizetitel. Der Nächstplatzierte rückt nach (`leagueTitleHolders`, 13.11.2026). Gilt für die Liga-Übertragung von Trainingsabenden; für Playoff-Finalisten im Schweizer System ist die Regel noch nicht umgesetzt.
+- **Schritt E (13.11.2026):** nur die Prüfung „berechnet gleich gespeichert“, keine Umstellung der Ligen. Gespeicherte Stände bleiben die Wahrheit; die Prüfung rechnet sie aus Startbestand und Abenden nach und zeigt Abweichungen.
 - **Namen in den Jahrestabellen:** ausgeklammert. Die Ewige Tabelle wird im nächsten Schritt gemeinsam geprüft (Schritt D, Hinweis oben).
 
 ### Ergänzte Regeln (vom Nutzer am 12.11.2026 bestätigt)

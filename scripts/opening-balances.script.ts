@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { it } from 'vitest';
 import { bookSessions, openingBalances, sessionResult } from '@/lib/leagueStandings';
+import { rankSession } from '@/lib/swissRanking';
 import { League, Match, PlayerStats, TrainingSession } from '@/types';
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -66,7 +67,7 @@ it('opening balances', () => {
     const booked = bookSessions(!!league.isEternal, counted);
     const { rows, negatives } = openingBalances(league.playerStats, booked);
     return { league: league.name, eternal: !!league.isEternal, evenings: counted.map(s => `${s.date.slice(0, 10)} ${s.name}`),
-      titles: counted.map(s => { const r = sessionResult(s); return { evening: `${s.date.slice(0, 10)} ${s.name}`, first: r.firstPlace, second: r.secondPlace, players: s.players.length }; }), storedRows: league.playerStats.length, bookedPlayers: booked.length, rows, negatives };
+      titles: counted.map(s => { const r = sessionResult(s); return { evening: `${s.date.slice(0, 10)} ${s.name}`, first: r.firstPlace, second: r.secondPlace, players: s.players.length, order: rankSession(s).stats.map(x => `${x.player.name} (${x.points}:${x.pointsAgainst}, ${x.goalDifference})`) }; }), storedRows: league.playerStats.length, bookedPlayers: booked.length, rows, negatives };
   });
   fs.writeFileSync(out, JSON.stringify(report, null, 1));
 });
