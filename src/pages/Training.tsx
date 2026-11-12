@@ -21,7 +21,8 @@ import {
 import { Player, TrainingSession, Match, League, PlayerStats } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { generatePairings } from '@/lib/pairingGenerator';
-import { compareEternalRows, compareLeagueRows, pendingDeciders, rankPlayers, winnerAndRunnerUp, DeciderResult } from '@/lib/ranking';
+import { pendingDeciders, rankPlayers, winnerAndRunnerUp, DeciderResult } from '@/lib/ranking';
+import { applySessionToLeague } from '@/lib/leagueTransfer';
 import { DeciderDialog, DeciderGroup } from '@/components/DeciderDialog';
 import { groupMatchesByRound, pausingPlayers } from '@/lib/tables';
 import { PauseNotice } from '@/components/PauseNotice';
@@ -203,83 +204,9 @@ const Training = () => {
     const alreadyDone = session.transferredToLeagues ?? [];
     const targetIds = leagueIds.filter(id => !alreadyDone.includes(id));
 
-    const updatedLeagues = leagues.map(league => {
-      if (!targetIds.includes(league.id)) return league;
-
-      const updatedStats = [...league.playerStats];
-
-      if (league.isEternal) {
-        // Eternal league: add points + pointsAgainst like normal leagues, +1 championship for 1st place
-        stats.forEach(stat => {
-          const mappedName = nameMatches.get(stat.player.name);
-          const searchName = mappedName || stat.player.name;
-
-          const existingIndex = updatedStats.findIndex(
-            s => s.player.name.toLowerCase() === searchName.toLowerCase()
-          );
-
-          const isChamp = stat.player.name === firstPlace;
-
-          if (existingIndex >= 0) {
-            const existing = updatedStats[existingIndex];
-            updatedStats[existingIndex] = {
-              ...existing,
-              points: existing.points + stat.points,
-              pointsAgainst: (existing.pointsAgainst || 0) + stat.pointsAgainst,
-              championships: (existing.championships || 0) + (isChamp ? 1 : 0),
-            };
-          } else {
-            updatedStats.push({
-              ...stat,
-              wins: 0, draws: 0, losses: 0,
-              goalsFor: 0, goalsAgainst: 0,
-              goalDifference: 0,
-              championships: isChamp ? 1 : 0,
-              viceChampionships: 0,
-            });
-          }
-        });
-
-        updatedStats.sort(compareEternalRows);
-      } else {
-        // Normal league: full stats transfer
-        stats.forEach(stat => {
-          const mappedName = nameMatches.get(stat.player.name);
-          const searchName = mappedName || stat.player.name;
-
-          const existingIndex = updatedStats.findIndex(
-            s => s.player.name.toLowerCase() === searchName.toLowerCase()
-          );
-
-          if (existingIndex >= 0) {
-            const existing = updatedStats[existingIndex];
-            updatedStats[existingIndex] = {
-              ...existing,
-              wins: existing.wins + stat.wins,
-              draws: existing.draws + stat.draws,
-              losses: existing.losses + stat.losses,
-              goalsFor: existing.goalsFor + stat.goalsFor,
-              goalsAgainst: existing.goalsAgainst + stat.goalsAgainst,
-              points: existing.points + stat.points,
-              pointsAgainst: existing.pointsAgainst + stat.pointsAgainst,
-              goalDifference: existing.goalDifference + stat.goalDifference,
-              championships: (existing.championships || 0) + (stat.player.name === firstPlace ? 1 : 0),
-              viceChampionships: (existing.viceChampionships || 0) + (stat.player.name === secondPlace ? 1 : 0),
-            };
-          } else {
-            updatedStats.push({
-              ...stat,
-              championships: stat.player.name === firstPlace ? 1 : 0,
-              viceChampionships: stat.player.name === secondPlace ? 1 : 0,
-            });
-          }
-        });
-
-        updatedStats.sort(compareLeagueRows);
-      }
-
-      return { ...league, playerStats: updatedStats };
-    });
+    const updatedLeagues = leagues.map(league =>
+      targetIds.includes(league.id) ? applySessionToLeague(league, stats, firstPlace, secondPlace, nameMatches) : league,
+    );
 
     // Save league by league. After each league the evening is marked as transferred to it,
     // so a failure never counts the same evening twice when the transfer is repeated.

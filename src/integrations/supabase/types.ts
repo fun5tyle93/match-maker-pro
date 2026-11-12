@@ -224,6 +224,7 @@ export type Database = {
           name: string | null
           ranking_rule: string
           round_count: number
+          swiss_state: Json | null
           tournament_type: string
           transferred_to_leagues: string[] | null
         }
@@ -236,6 +237,7 @@ export type Database = {
           name?: string | null
           ranking_rule?: string
           round_count?: number
+          swiss_state?: Json | null
           tournament_type?: string
           transferred_to_leagues?: string[] | null
         }
@@ -248,6 +250,7 @@ export type Database = {
           name?: string | null
           ranking_rule?: string
           round_count?: number
+          swiss_state?: Json | null
           tournament_type?: string
           transferred_to_leagues?: string[] | null
         }

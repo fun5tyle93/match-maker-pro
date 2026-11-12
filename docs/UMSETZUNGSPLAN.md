@@ -417,6 +417,14 @@ Das `UPDATE` füllt nur die neue Spalte und ist deshalb erlaubt (Regel 4). **Ber
 
 **Branch:** `feat/swiss-rewrite`. Enthält eine additive Migration (7.6).
 
+> **Umsetzungsstand (Schritt B im Pull Request):** Auslosung in `src/lib/swissPairingEngine.ts` (`pairRound`, `maxSwissRounds`, `BYE_ID`, Fehlerklassen) und `src/lib/swissPairing.ts` (`generateSwissRoundMatches`, `generateRefereeRound`). Übertragung in `src/lib/leagueTransfer.ts`. Speichern in `src/lib/storage.ts` (`swissStateSupported`, `saveSwissSession`, `loadRunningSwissSession`, `discardSwissSession`) und `src/hooks/useSwissAutosave.ts`. Migration: `supabase/migrations/20261113100000_swiss_state.sql`. Tests: `swissPairingEngine.test.ts`, `leagueTransfer.test.ts`, `storageSwiss.test.ts`, `e2e/swiss-flow.mjs`.
+>
+> **Abweichungen vom Plan, bewusst:**
+> - **Abschluss:** Es bleibt bei der Reihenfolge des Trainings (erst Ligen, jede mit Vermerk in `transferredToLeagues`, dann der Abschluss). Jeder Schritt wird sofort in der Datenbank gespeichert, eine wiederholte Übertragung zählt nichts doppelt, und es geht nichts verloren. Der Abend wird nicht vor den Ligen als abgeschlossen gespeichert, weil er sonst bei einem Abbruch in der Historie stünde, ohne in den Ligen zu sein.
+> - **Zurücksetzen:** Es wird nichts gelöscht. Nur `swiss_state` wird geleert, Abend, Spieler und Spiele bleiben stehen.
+> - **„In Historie speichern“:** Der Knopf ist in diesem Modus ausgeblendet, weil er ein laufendes Turnier als abgeschlossen markieren würde. Ohne die Datenbankspalte bleibt er wie bisher.
+> - **Platzhalter im Playoff:** Leere Plätze und Freilose haben Platzhalter-IDs, die keine UUIDs sind. Beim Speichern werden sie in eine gültige, aus der Spiel-ID abgeleitete UUID mit dem Namen „–“ umgeschrieben (`storedPlayerId`).
+
 ### 7.1 Was heute kaputt ist (belegt, siehe Anhang)
 
 1. **Wiederholungsspiele:** `generateSwissRoundMatches` paart gierig von oben nach unten und weicht auf ein Wiederholungsspiel aus, wenn es nicht weiterkommt. In Simulationen kam es dadurch in 47 bis 80 % der Turniere zu einem **vermeidbaren** Wiederholungsspiel.
@@ -443,7 +451,8 @@ Das `UPDATE` füllt nur die neue Spalte und ist deshalb erlaubt (Regel 4). **Ber
 - **R8 Schiedsrichter-Modus:**
   - Zuerst wird die ganze Runde nach R1 bis R6 ausgelost.
   - Dann werden die Spiele nach Rang im Reißverschluss auf die Durchgänge verteilt: Spiel 1 (die besten beiden) in Durchgang 1, Spiel 2 in Durchgang 2, Spiel 3 in Durchgang 1 und so weiter.
-  - **Schiedsrichter eines Durchgangs** sind die Spieler, die im **anderen** Durchgang spielen, **plus der Spieler mit Freilos**. Er spielt in dieser Runde nicht und steht deshalb in beiden Durchgängen als Schiedsrichter zur Verfügung (Entscheidung des Nutzers vom 12.11.2026: Freilos und Schiedsrichter widersprechen sich nicht). In der Anzeige erscheint er unter „Schiedsrichter“ und zusätzlich, wie heute, als „Spielfrei“.
+  - **Schiedsrichter eines Durchgangs** sind die Spieler, die im **anderen** Durchgang spielen.
+  - **Der Spieler mit Freilos** ist in **einem** Durchgang wirklich frei (dort steht „Spielfrei“, er ist dort kein Schiedsrichter) und im **anderen** Durchgang Schiedsrichter (Entscheidung des Nutzers vom 13.11.2026; sie ersetzt die frühere Fassung „in beiden Durchgängen“). Der freie Durchgang ist der mit weniger Spielen, weil dort weniger Schiedsrichter gebraucht werden und der Freilos-Spieler so dort hilft, wo die Schiedsrichter knapper sind (bei 7 Spielern: 3 und 4 statt 2 und 5). Bei gleich vielen Spielen wird der freie Durchgang gelost. `byePlayerId` steht an dem Durchgang, in dem er frei ist.
   - Die Durchgänge können sich um ein Spiel unterscheiden. Das ist gewollt, denn genau das behebt den Absturz bei 6, 7, 10, 11 und 14 Spielern.
 - **R9 Klarer Fehlerfall:** Lässt sich eine Runde trotzdem nicht auslosen (darf nach R6 nicht vorkommen), wird **kein** Wiederholungsspiel erzeugt. Stattdessen erscheint eine verständliche Fehlermeldung als Toast, und der Zustand bleibt unverändert.
 
@@ -543,10 +552,10 @@ Sie ist additiv. Die bestehenden Policies gelten auch für die neue Spalte. Zuer
 2. **Schiedsrichter-Modus:** Für n = 4 bis 14 je mindestens 200 Turniere über die maximale Rundenzahl:
    - Kein Spieler spielt in beiden Durchgängen.
    - Jeder Aktive spielt genau einmal pro Runde.
-   - Die Schiedsrichter jedes Durchgangs sind genau die Spieler des anderen Durchgangs.
+   - Die Schiedsrichter jedes Durchgangs sind genau die Spieler des anderen Durchgangs, bei ungerader Spielerzahl zusätzlich der Spieler mit Freilos, aber nur in dem Durchgang, in dem er nicht frei ist.
    - 0 Wiederholungen, kein Absturz.
 3. **Playoff:** Eine Wiederholung aus der Vorrunde ist im Playoff erlaubt. Ein Test zeigt, dass zwei Vorrunden-Gegner im Halbfinale aufeinandertreffen können und die Auslosung trotzdem läuft. Ein unentschiedenes Playoff-Ergebnis wird abgelehnt (6.7).
-   - **Schiedsrichter mit Freilos:** Bei ungerader Spielerzahl im Schiedsrichter-Modus steht der Spieler mit Freilos in den Schiedsrichterlisten **beider** Durchgänge, aber in keinem Spiel.
+   - **Schiedsrichter mit Freilos:** Bei ungerader Spielerzahl im Schiedsrichter-Modus ist der Spieler mit Freilos in genau **einem** Durchgang Schiedsrichter und im anderen frei (dort trägt der Durchgang das Freilos). Er steht in keinem Spiel.
 4. **Übertragung** (`leagueTransfer.test.ts`):
    - Normale Liga: Alle Spalten werden addiert, plus Meister- und Vizetitel.
    - Ewige Tabelle: nur Punkte, Gegenpunkte und Meistertitel, sowohl für Training als auch für Swiss.
@@ -764,7 +773,7 @@ Sie wird per `supabase.rpc('complete_session', …)` aufgerufen und ersetzt die 
 ### Bereits entschieden (12.11.2026)
 
 - **Wertung bei Gleichstand:** nach DTKV-Spielordnung 2026, siehe Schritt W. Für den Abend gilt § 8 Abs. 3, für die Jahrestabelle analog § 2 Abs. 6.
-- **Freilos im Schiedsrichter-Modus:** Der Spieler mit Freilos ist in beiden Durchgängen der Runde Schiedsrichter (R8).
+- **Freilos im Schiedsrichter-Modus:** Der Spieler mit Freilos ist in einem Durchgang frei und im anderen Schiedsrichter (R8, Entscheidung vom 13.11.2026).
 - **Halbe Punkte nach Sudden Death:** werden umgesetzt, für die Abschlussrangliste im Schweizer System nach SO § 9 Abs. 6 (6.7, 6.8). Die Punkte sind Vorrunde plus Playoff, die halben Punkte sind nur die Zählformel für Sudden-Death-Spiele. Die Liga-Übertragung bleibt ganzzahlig.
 - **Playoff:** Pro Paarung gibt es immer genau ein Spiel, keine Best-of-Varianten.
 - **Namen in den Jahrestabellen:** ausgeklammert. Die Ewige Tabelle wird im nächsten Schritt gemeinsam geprüft (Schritt D, Hinweis oben).

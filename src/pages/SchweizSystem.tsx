@@ -33,22 +33,28 @@ import {
 import { playoffResultError } from '@/lib/tournamentPhases';
 import { sessionFinalRanking } from '@/lib/swissRanking';
 import { FinalRankingTable } from '@/components/FinalRankingTable';
+import { SaveStatusBadge } from '@/components/SaveStatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
-import { loadLeagues, saveLeague } from '@/lib/storage';
+import {
+  loadLeagues, saveLeague, swissStateSupported, loadRunningSwissSession, saveSwissSession, discardSwissSession,
+} from '@/lib/storage';
+import { useSwissAutosave, findRestorableSwissBackup, clearSwissBackup, announceRestored } from '@/hooks/useSwissAutosave';
+import { maxSwissRounds, PairingBudgetError, SwissPairingError } from '@/lib/swissPairingEngine';
+import { applySessionToLeague } from '@/lib/leagueTransfer';
 import { cn } from '@/lib/utils';
 import { pluralize } from '@/lib/plural';
 import { handleExportXLSX, handleExportPDF, persistSwissToHistory, convertSwissToTrainingSession, computeFinalSwissStats } from '@/pages/swissHelpers';
 
 const STORAGE_KEY = 'swiss-session-v1';
 
-function saveSwissSession(s: SwissSession | null) {
+function saveSwissToDevice(s: SwissSession | null) {
   try {
     if (s) localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
     else localStorage.removeItem(STORAGE_KEY);
   } catch {}
 }
 
-function loadSwissSession(): SwissSession | null {
+function loadSwissFromDevice(): SwissSession | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? (JSON.parse(raw) as SwissSession) : null;
@@ -61,8 +67,12 @@ function loadSwissSession(): SwissSession | null {
 
 export default function SchweizSystem() {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, loading: authLoading } = useAuth();
 
+  // 'db': the running tournament lives in the database; 'local': the database cannot hold it yet (migration missing),
+  // it stays in this browser as before
+  const [storageMode, setStorageMode] = useState<'loading' | 'db' | 'local'>('loading');
+  const [loadError, setLoadError] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
   const [session, setSession] = useState<SwissSession | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);
@@ -79,34 +89,100 @@ export default function SchweizSystem() {
     playoffStart: 'qf',
   });
 
-  // Load persisted session on mount
-  useEffect(() => {
-    const saved = loadSwissSession();
-    if (saved) {
-      setSession(saved);
-      setPlayers(saved.players);
-      const roundKeys = saved.rounds.flatMap(r =>
-        r.pass ? [`${r.roundNumber}-${r.pass}`] : [`${r.roundNumber}`]
+  const saveToDb = useCallback((s: SwissSession) => saveSwissSession(convertSwissToTrainingSession(s), s), []);
+  const autosave = useSwissAutosave(session, isAdmin && storageMode === 'db', saveToDb);
+  const { markSaved, afterNextSave, closeSession, reopenSession } = autosave;
+
+  const expandIncomplete = (saved: SwissSession) => {
+    const roundKeys = saved.rounds.flatMap(r =>
+      r.pass ? [`${r.roundNumber}-${r.pass}`] : [`${r.roundNumber}`]
+    );
+    const incomplete = roundKeys.filter(k => {
+      const [rn, pass] = k.split('-').map(Number);
+      const round = saved.rounds.find(r =>
+        r.roundNumber === rn && (pass ? r.pass === pass : true)
       );
-      const incomplete = roundKeys.filter(k => {
-        const [rn, pass] = k.split('-').map(Number);
-        const round = saved.rounds.find(r =>
-          r.roundNumber === rn && (pass ? r.pass === pass : true)
-        );
-        return round && !round.isCompleted;
-      });
-      setExpandedRounds(incomplete.length > 0 ? [incomplete[0]] : []);
-    }
+      return round && !round.isCompleted;
+    });
+    setExpandedRounds(incomplete.length > 0 ? [incomplete[0]] : []);
+  };
+
+  const showSession = (s: SwissSession) => {
+    setSession(s);
+    setPlayers(s.players);
+    expandIncomplete(s);
+  };
+
+  // Load the running tournament (once the login state is known: only an admin may import a tournament from the device)
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supported = await swissStateSupported();
+        if (cancelled) return;
+        const device = loadSwissFromDevice();
+
+        if (!supported) {
+          // Database cannot hold it yet: keep it in the browser, as before
+          setStorageMode('local');
+          if (device) showSession(device);
+          return;
+        }
+
+        const server = await loadRunningSwissSession();
+        if (cancelled) return;
+        // Changes that never reached the server (connection lost, tab closed) are restored
+        const restored = findRestorableSwissBackup(server);
+        let current = restored ?? server;
+        markSaved(restored ? null : server);
+        if (restored) announceRestored();
+
+        if (device && isAdmin) {
+          if (!current) {
+            // A tournament that so far only existed on this device: move it to the database. The old copy is removed
+            // only after the server confirmed the save, nothing is deleted before.
+            current = device;
+            markSaved(null);
+            afterNextSave(() => {
+              try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+              toast.success('Turnier vom Gerät übernommen und in der Datenbank gespeichert.');
+            });
+          } else if (JSON.stringify(device) === JSON.stringify(server)) {
+            try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+          } else {
+            // Different from what the server has: the server version wins, the device copy is kept under its own key
+            try {
+              localStorage.setItem(`${STORAGE_KEY}-conflict-${new Date().toISOString().slice(0, 10)}`, JSON.stringify(device));
+              localStorage.removeItem(STORAGE_KEY);
+            } catch { /* ignore */ }
+            toast.warning('Auf diesem Gerät lag eine abweichende Fassung des Turniers. Es gilt die gespeicherte Fassung; die Gerätefassung bleibt gesichert.');
+          }
+        }
+
+        setStorageMode('db');
+        if (current) showSession(current);
+      } catch (err) {
+        // Never show the empty start form after a failed load: starting a new tournament would hide the running one
+        console.error('Failed to load the Swiss tournament:', err);
+        if (!cancelled) {
+          setLoadError(true);
+          toast.error('Das Turnier konnte nicht geladen werden');
+        }
+      }
+    })();
     loadLeagues()
       .then(setLeagues)
       .catch(err => {
         console.error('Failed to load leagues:', err);
         toast.error('Die Ligen konnten nicht geladen werden');
       });
-  }, []);
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, isAdmin]);
 
-  // Persist session on change
-  useEffect(() => { saveSwissSession(session); }, [session]);
+  // Without the database column the tournament stays in this browser
+  useEffect(() => { if (storageMode === 'local') saveSwissToDevice(session); }, [session, storageMode]);
 
   // ─── Player management ────────────────────────────────────────────────
 
@@ -131,25 +207,30 @@ export default function SchweizSystem() {
       return;
     }
 
-    const initializedPlayers = players.map(p => ({ ...p, hasHadBye: p.hasHadBye ?? false }));
+    // More rounds than players can meet cannot be drawn without a rematch (R7): the number is limited
+    const maxRounds = Math.min(10, maxSwissRounds(players.length));
+    const rounds = Math.min(config.rounds, maxRounds);
+    if (rounds < config.rounds) {
+      toast.info(`Die Rundenzahl wurde auf ${rounds} begrenzt: Mehr Runden sind mit ${players.length} Spielern ohne Wiederholung nicht möglich.`);
+    }
 
     const newSession: SwissSession = {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
-      config: { ...config },
-      players: initializedPlayers,
+      config: { ...config, rounds },
+      players: [...players],
       rounds: [],
       currentRound: 0,
       isCompleted: false,
       // The lot is drawn once and kept with the tournament: last criterion of the standings (docs/UMSETZUNGSPLAN.md 6.6)
-      lot: Object.fromEntries(initializedPlayers.map(p => [p.id, Math.random()])),
+      lot: Object.fromEntries(players.map(p => [p.id, Math.random()])),
     };
 
     // Generate round 1
-    const sessionWithR1 = advanceToNextRound(newSession);
-    setSession(sessionWithR1);
-    setExpandedRounds(['1']);
-    toast.success(`Schweizer System gestartet – ${pluralize(config.rounds, 'Runde', 'Runden')} geplant`);
+    const sessionWithR1 = tryAdvance(newSession);
+    if (!sessionWithR1) return;
+    setSession(sessionWithR1);   // the draw already expanded the new round (its key is "1" or "1-1" in referee mode)
+    toast.success(`Schweizer System gestartet – ${pluralize(rounds, 'Runde', 'Runden')} geplant`);
   };
 
   // ─── Generate next round ──────────────────────────────────────────────
@@ -158,20 +239,13 @@ export default function SchweizSystem() {
     const nextRoundNumber = s.currentRound + 1;
     let newRounds: SwissRound[];
 
+    // The bye is read from the rounds (byePlayerId), there is no separate flag on the player that could get out of step
     if (s.config.refereeMode) {
-      const { pass1, pass2, byePlayerId } = generateRefereeRound(s.players, s.rounds, nextRoundNumber);
-      // Attach byePlayerId to first pass
-      if (byePlayerId) pass1.byePlayerId = byePlayerId;
+      const { pass1, pass2 } = generateRefereeRound(s.players, s.rounds, nextRoundNumber, s.config.rounds, Math.random, s.lot);
       newRounds = [...s.rounds, pass1, pass2];
       setExpandedRounds([`${nextRoundNumber}-1`]);
-
-      // mark bye on player
-      const updatedPlayers = byePlayerId
-        ? s.players.map(p => p.id === byePlayerId ? { ...p, hasHadBye: true } : p)
-        : s.players;
-      return { ...s, rounds: newRounds, currentRound: nextRoundNumber, players: updatedPlayers };
     } else {
-      const { matches, byePlayerId } = generateSwissRoundMatches(s.players, s.rounds, nextRoundNumber);
+      const { matches, byePlayerId } = generateSwissRoundMatches(s.players, s.rounds, nextRoundNumber, s.config.rounds, Math.random, s.lot);
       const round: SwissRound = {
         roundNumber: nextRoundNumber,
         phase: 'swiss',
@@ -181,11 +255,20 @@ export default function SchweizSystem() {
       };
       newRounds = [...s.rounds, round];
       setExpandedRounds([`${nextRoundNumber}`]);
+    }
+    return { ...s, rounds: newRounds, currentRound: nextRoundNumber };
+  }
 
-      const updatedPlayers = byePlayerId
-        ? s.players.map(p => p.id === byePlayerId ? { ...p, hasHadBye: true } : p)
-        : s.players;
-      return { ...s, rounds: newRounds, currentRound: nextRoundNumber, players: updatedPlayers };
+  /** Draws the next round; when that is impossible a message is shown and the tournament stays as it was. */
+  function tryAdvance(s: SwissSession): SwissSession | null {
+    try {
+      return advanceToNextRound(s);
+    } catch (err) {
+      console.error('Drawing the next round failed:', err);
+      if (err instanceof SwissPairingError) toast.error(err.message);
+      else if (err instanceof PairingBudgetError) toast.error('Die Auslosung hat zu lange gedauert. Bitte die Rundenzahl prüfen.');
+      else toast.error('Die Runde konnte nicht ausgelost werden.');
+      return null;
     }
   }
 
@@ -202,15 +285,10 @@ export default function SchweizSystem() {
     // confirm
     if (!confirm(`Runde ${cur} wirklich entfernen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
 
+    // The bye of the removed round goes with it: byes are read from the rounds
     const remaining = session.rounds.filter(r => r.roundNumber !== cur);
-    // rollback bye flags if needed
-    const byePlayers = roundSegments.map(r => r.byePlayerId).filter(Boolean) as string[];
-    let updatedPlayers = session.players;
-    if (byePlayers.length > 0) {
-      updatedPlayers = updatedPlayers.map(p => byePlayers.includes(p.id) ? { ...p, hasHadBye: false } : p);
-    }
 
-    setSession(prev => prev ? { ...prev, rounds: remaining, currentRound: Math.max(0, prev.currentRound - 1), players: updatedPlayers } : prev);
+    setSession(prev => prev ? { ...prev, rounds: remaining, currentRound: Math.max(0, prev.currentRound - 1) } : prev);
     toast.success(`Runde ${cur} entfernt`);
   };
 
@@ -249,7 +327,8 @@ export default function SchweizSystem() {
       }
       return;
     }
-    const updated = advanceToNextRound(session);
+    const updated = tryAdvance(session);
+    if (!updated) return;
     setSession(updated);
     toast.success(`Runde ${updated.currentRound} gestartet`);
   };
@@ -300,59 +379,10 @@ export default function SchweizSystem() {
     const alreadyDone = session.transferredToLeagues ?? [];
     const targetIds = leagueIds.filter(id => !alreadyDone.includes(id));
 
-    const updatedLeagues = leagues.map(league => {
-      if (!targetIds.includes(league.id)) return league;
-      const updatedStats = [...league.playerStats];
-
-      stats.forEach(stat => {
-        const mappedName = nameMatches.get(stat.player.name);
-        const searchName = mappedName || stat.player.name;
-        const existingIdx = updatedStats.findIndex(
-          s => s.player.name.toLowerCase() === searchName.toLowerCase()
-        );
-        const isChamp = stat.player.name === firstPlace;
-        const isVice = stat.player.name === secondPlace;
-
-        if (existingIdx >= 0) {
-          const e = updatedStats[existingIdx];
-          updatedStats[existingIdx] = {
-            ...e,
-            wins: e.wins + stat.wins,
-            draws: e.draws + stat.draws,
-            losses: e.losses + stat.losses,
-            goalsFor: e.goalsFor + stat.goalsFor,
-            goalsAgainst: e.goalsAgainst + stat.goalsAgainst,
-            points: e.points + stat.points,
-            pointsAgainst: (e.pointsAgainst ?? 0) + stat.pointsAgainst,
-            goalDifference: e.goalDifference + stat.goalDifference,
-            championships: (e.championships ?? 0) + (isChamp ? 1 : 0),
-            viceChampionships: (e.viceChampionships ?? 0) + (isVice ? 1 : 0),
-          };
-        } else {
-          updatedStats.push({
-            player: stat.player,
-            wins: stat.wins,
-            draws: stat.draws,
-            losses: stat.losses,
-            goalsFor: stat.goalsFor,
-            goalsAgainst: stat.goalsAgainst,
-            points: stat.points,
-            pointsAgainst: stat.pointsAgainst,
-            goalDifference: stat.goalDifference,
-            championships: isChamp ? 1 : 0,
-            viceChampionships: isVice ? 1 : 0,
-          });
-        }
-      });
-
-      updatedStats.sort((a, b) => {
-        if (b.points !== a.points) return b.points - a.points;
-        if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
-        return b.goalsFor - a.goalsFor;
-      });
-
-      return { ...league, playerStats: updatedStats };
-    });
+    // The same booking as for a training evening (shared function): the eternal table only gets points and championships
+    const updatedLeagues = leagues.map(league =>
+      targetIds.includes(league.id) ? applySessionToLeague(league, stats, firstPlace, secondPlace, nameMatches) : league,
+    );
 
     // Save league by league and remember each one, so a repeated transfer never counts twice
     let currentLeagues = leagues;
@@ -376,16 +406,19 @@ export default function SchweizSystem() {
       setSession(currentSession);
     }
 
-    // persist to history
+    // Complete the tournament. Autosaving of this tournament stops first, so that an older state cannot overwrite it.
+    closeSession(currentSession.id);
     const savedToHistory = await persistSwissToHistory({
       ...currentSession,
       transferredToLeagues: [...new Set([...alreadyDone, ...leagueIds])],
     });
     if (!savedToHistory) {
+      reopenSession();
       toast.error('Die Ligen sind aktualisiert, aber der Abend wurde nicht abgeschlossen. Bitte die Übertragung erneut starten – die Ligen werden nicht doppelt gezählt.');
       return;
     }
-    saveSwissSession(null);
+    clearSwissBackup();
+    saveSwissToDevice(null);
     setSession(null);
     setPlayers([]);
     toast.success(`Ergebnisse zu ${leagueIds.length} Liga(en) übertragen`);
@@ -407,8 +440,21 @@ export default function SchweizSystem() {
     toast.success(`Liga "${name}" erstellt`);
   };
 
-  const handleResetSession = () => {
-    saveSwissSession(null);
+  const handleResetSession = async () => {
+    if (session && storageMode === 'db') {
+      // Nothing is deleted: the running state is cleared, the evening with its players and matches stays in the database
+      closeSession(session.id);
+      try {
+        await discardSwissSession(session.id);
+      } catch (err) {
+        console.error('Failed to reset the Swiss tournament:', err);
+        reopenSession();
+        toast.error('Das Turnier konnte nicht zurückgesetzt werden. Bitte erneut versuchen.');
+        return;
+      }
+      clearSwissBackup();
+    }
+    saveSwissToDevice(null);
     setSession(null);
     setPlayers([]);
     toast.info('Schweizer System zurückgesetzt');
@@ -417,6 +463,10 @@ export default function SchweizSystem() {
   // ─── Derived state ────────────────────────────────────────────────────
 
   const stats = session ? computeSwissStats(session.players, session.rounds, session.lot) : [];
+
+  // Most rounds without a rematch (R7); the slider and the start follow the number of players
+  const maxRounds = Math.max(1, Math.min(10, maxSwissRounds(players.length)));
+  const roundsValue = Math.min(config.rounds, maxRounds);
 
   const currentRoundData = session?.rounds.filter(r => r.roundNumber === session.currentRound) ?? [];
   const currentRoundComplete = currentRoundData.length > 0 && currentRoundData.every(r => r.isCompleted);
@@ -432,6 +482,34 @@ export default function SchweizSystem() {
   const transferStats = session ? computeFinalSwissStats(session).stats : [];
 
   // ─── Render ──────────────────────────────────────────────────────────
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-6 md:py-8">
+          <div className="mx-auto max-w-md space-y-4 py-16 text-center">
+            <p className="font-medium text-destructive">Das Turnier konnte nicht geladen werden.</p>
+            <p className="text-sm text-muted-foreground">
+              Es wurde nichts verändert. Bitte Verbindung prüfen und erneut laden.
+            </p>
+            <Button onClick={() => window.location.reload()}>Erneut laden</Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (storageMode === 'loading') {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-6 md:py-8">
+          <p className="text-muted-foreground text-center py-16">Lade Daten...</p>
+        </main>
+      </div>
+    );
+  }
 
   if (!session) {
     return (
@@ -461,18 +539,19 @@ export default function SchweizSystem() {
                 <CardContent className="space-y-6">
                   {/* Rounds slider */}
                   <div className="space-y-2">
-                    <Label>Anzahl Runden: <span className="text-primary font-bold">{config.rounds}</span></Label>
+                    <Label>Anzahl Runden: <span className="text-primary font-bold">{roundsValue}</span></Label>
                     <Slider
-                      min={2} max={10} step={1}
-                      value={[config.rounds]}
+                      min={1} max={maxRounds} step={1}
+                      value={[roundsValue]}
                       onValueChange={([v]) => setConfig(c => ({ ...c, rounds: v }))}
                       className="w-full"
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>2</span><span>10</span>
+                      <span>1</span><span>{maxRounds}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Empfehlung: ⌈log₂(n)⌉ = {pluralize(Math.ceil(Math.log2(Math.max(players.length, 2))), 'Runde', 'Runden')} für {pluralize(players.length, 'Spieler', 'Spieler')}
+                      Empfehlung: ⌈log₂(n)⌉ = {pluralize(Math.min(maxRounds, Math.ceil(Math.log2(Math.max(players.length, 2)))), 'Runde', 'Runden')} für {pluralize(players.length, 'Spieler', 'Spieler')}.
+                      Mehr als {pluralize(maxRounds, 'Runde', 'Runden')} sind mit {pluralize(players.length, 'Spieler', 'Spielern')} ohne Wiederholung nicht möglich.
                     </p>
                   </div>
 
@@ -635,16 +714,25 @@ export default function SchweizSystem() {
               <Button variant="outline" size="sm" onClick={() => handleExportPDF(session)}>
                 Export PDF
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => persistSwissToHistory(session)}
-              >
-                In Historie speichern
-              </Button>
+              {storageMode === 'local' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => persistSwissToHistory(session)}
+                >
+                  In Historie speichern
+                </Button>
+              )}
             </div>
           )}
         </div>
+
+        {isAdmin && storageMode === 'db' && <SaveStatusBadge status={autosave.status} onRetry={autosave.retry} />}
+        {isAdmin && storageMode === 'local' && (
+          <p role="note" className="mb-4 text-xs text-muted-foreground">
+            Turnier wird nur auf diesem Gerät gespeichert.
+          </p>
+        )}
 
         {/* Progress bar */}
         <div className="mb-6">

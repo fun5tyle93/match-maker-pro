@@ -183,8 +183,9 @@ const swissSession = () => ({
   ],
 });
 {
-  const { ctx } = await newContext({ current_session: [{ id: 1, session_id: null }], training_sessions: [], training_players: [], matches: [], leagues: [{ id: 'L1', name: 'Liga Eins', year: 2026, created_at: '2026-01-01T00:00:00Z', is_eternal: false }], player_stats: [] },
-    { localStorageItems: { 'swiss-session-v1': swissSession() } });
+  // The tournament lies on the device; on loading it is moved to the database (step B), so the test reads it from there
+  const swissTables = { current_session: [{ id: 1, session_id: null }], training_sessions: [], training_players: [], matches: [], leagues: [{ id: 'L1', name: 'Liga Eins', year: 2026, created_at: '2026-01-01T00:00:00Z', is_eternal: false }], player_stats: [] };
+  const { ctx } = await newContext(swissTables, { localStorageItems: { 'swiss-session-v1': swissSession() } });
   const page = await ctx.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(BASE + '/schweizer-system');
   await page.getByRole('tab', { name: /Playoff/ }).click();
@@ -205,8 +206,9 @@ const swissSession = () => ({
   await ok(0).click();
   await page.waitForTimeout(400);
   check('Playoff: gespielte Sudden-Death-Partie ist gekennzeichnet', (await page.getByText('Sudden Death', { exact: true }).count()) >= 1);
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('swiss-session-v1')));
-  check('Playoff: suddenDeath wird mit dem Turnier gespeichert', stored.playoffMatches.find(m => m.id === 'p1')?.suddenDeath === true);
+  await page.waitForTimeout(1000);
+  const stored = swissTables.training_sessions[0]?.swiss_state;
+  check('Playoff: suddenDeath wird mit dem Turnier gespeichert', stored?.playoffMatches?.find(m => m.id === 'p1')?.suddenDeath === true, JSON.stringify(stored?.playoffMatches?.[0]));
 
   // second semi-final (normal result), then the final
   await inputs(1).nth(0).fill('1'); await inputs(1).nth(1).fill('0'); await ok(1).click();
