@@ -54,6 +54,8 @@ export interface LeagueRowRef {
   name: string;
   points: number;
   championships: number;
+  /** Fixed identity of the player (players.id), if the row has one */
+  ref?: string;
 }
 
 /**
@@ -164,20 +166,39 @@ export interface TransferPlan {
   autoMatches: AutoMatch[];
 }
 
-/** What has to be decided before an evening can be transferred to the chosen leagues. */
-export function planTransferMatches(eveningNames: string[], leagues: TransferLeagueRef[]): TransferPlan {
+/** A player of the evening: the name as typed, and the fixed identity if the player has one. */
+export interface EveningPlayerRef {
+  name: string;
+  ref?: string;
+}
+
+/**
+ * What has to be decided before an evening can be transferred to the chosen leagues.
+ *  - a player with a fixed identity is found by it, whatever the name says, and is never asked about
+ *    (a known person that is not in the league yet simply starts there)
+ *  - otherwise the name decides: the same name (see `sameName`) is matched, a similar name is asked about
+ */
+export function planTransferMatches(eveningPlayers: EveningPlayerRef[], leagues: TransferLeagueRef[]): TransferPlan {
   const questions: NameQuestion[] = [];
   const autoMatches: AutoMatch[] = [];
-  const names = [...new Set(eveningNames)];
+  const seen = new Set<string>();
+  const players = eveningPlayers.filter(p => {
+    const key = `${p.ref ?? ''}\u0000${p.name}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   for (const league of leagues) {
-    for (const eveningName of names) {
-      const index = findRowIndex(league.rows, eveningName);
+    for (const { name: eveningName, ref } of players) {
+      const byRef = ref ? league.rows.findIndex(row => row.ref === ref) : -1;
+      const index = byRef >= 0 ? byRef : findRowIndex(league.rows, eveningName);
       if (index >= 0) {
         const rowName = league.rows[index].name;
         if (rowName.trim() !== eveningName.trim()) autoMatches.push({ leagueId: league.id, eveningName, leagueRowName: rowName });
         continue;
       }
+      if (ref) continue; // identity known: a new player in this league, nothing to ask
       const candidates = findNameCandidates(eveningName, league.rows);
       if (candidates.length > 0) questions.push({ leagueId: league.id, leagueName: league.name, eveningName, candidates });
     }

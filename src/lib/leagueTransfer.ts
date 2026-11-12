@@ -1,4 +1,4 @@
-import { League, PlayerStats } from '@/types';
+import { League, Player, PlayerStats } from '@/types';
 import { compareEternalRows, compareLeagueRows } from './ranking';
 import { findRowIndex } from './nameMatching';
 
@@ -7,6 +7,11 @@ export type NameMatches = Map<string, string>;
 
 /** Confirmed matches per league (key: league id). */
 export type NameMatchesByLeague = Map<string, NameMatches>;
+
+/** A row that is found by name takes over the identity of the player, if it has none yet (never replaces one). */
+function withRef(player: Player, ref: string | undefined): Player {
+  return player.ref || !ref ? player : { ...player, ref };
+}
 
 /**
  * Adds the results of one evening or tournament to a league and returns the updated league.
@@ -33,7 +38,12 @@ export function applySessionToLeague(
 
   stats.forEach(stat => {
     const searchName = nameMatches.get(stat.player.name) || stat.player.name;
-    const existingIndex = findRowIndex(updatedStats.map(s => ({ name: s.player.name, points: s.points })), searchName);
+    // The fixed identity decides first: the same person is the same row, whatever the name says
+    const byRef = stat.player.ref ? updatedStats.findIndex(s => s.player.ref === stat.player.ref) : -1;
+    const existingIndex =
+      byRef >= 0
+        ? byRef
+        : findRowIndex(updatedStats.map(s => ({ name: s.player.name, points: s.points })), searchName);
     const isChampion = stat.player.name === firstPlace;
     const isViceChampion = stat.player.name === secondPlace;
 
@@ -42,6 +52,7 @@ export function applySessionToLeague(
         const existing = updatedStats[existingIndex];
         updatedStats[existingIndex] = {
           ...existing,
+          player: withRef(existing.player, stat.player.ref),
           points: existing.points + stat.points,
           pointsAgainst: (existing.pointsAgainst || 0) + stat.pointsAgainst,
           championships: (existing.championships || 0) + (isChampion ? 1 : 0),
@@ -60,6 +71,7 @@ export function applySessionToLeague(
       const existing = updatedStats[existingIndex];
       updatedStats[existingIndex] = {
         ...existing,
+        player: withRef(existing.player, stat.player.ref),
         wins: existing.wins + stat.wins,
         draws: existing.draws + stat.draws,
         losses: existing.losses + stat.losses,

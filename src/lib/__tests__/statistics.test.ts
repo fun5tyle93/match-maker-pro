@@ -252,3 +252,85 @@ describe('sortRecords', () => {
     expect(input.map(r => r.name)).toEqual(['Lucky', 'Weak', 'Solid']);
   });
 });
+
+// ─── Fixed identity (Player.ref) ────────────────────────────────────────────────
+
+import { buildRegistry } from '@/lib/playerRegistry';
+
+/** An evening whose players carry the given identities (name -> ref). */
+function eveningWithRefs(id: string, date: string, results: Result[], refs: Record<string, string>): TrainingSession {
+  const base = evening(id, date, results);
+  const withRef = (p: { id: string; name: string }) => (refs[p.name] ? { ...p, ref: refs[p.name] } : p);
+  return {
+    ...base,
+    players: base.players.map(withRef),
+    matches: base.matches.map(m => ({ ...m, homePlayer: withRef(m.homePlayer), awayPlayer: withRef(m.awayPlayer) })),
+  };
+}
+
+describe('statistics with a fixed identity', () => {
+  const registry = buildRegistry(
+    [{ id: 'R-erik', display_name: 'Erik Schwarz' }, { id: 'R-ben', display_name: 'Ben' }],
+    [{ alias: 'erik', player_id: 'R-erik' }],
+  );
+
+  it('counts one person under different spellings as one player and shows the display name', () => {
+    const sessions = [
+      eveningWithRefs('a', '2026-03-01T18:00:00Z', [['Erik Schwarz', 'Ben', 3, 1]], { 'Erik Schwarz': 'R-erik', Ben: 'R-ben' }),
+      eveningWithRefs('b', '2026-11-06T18:00:00Z', [['Erik', 'Ben', 1, 1]], { Erik: 'R-erik', Ben: 'R-ben' }),
+    ];
+    const withoutRegistry = buildRecords(sessions);
+    expect(withoutRegistry.length).toBe(2);
+    const erik = withoutRegistry.find(r => r.key === 'ref:R-erik')!;
+    expect(erik).toMatchObject({ games: 2, wins: 1, draws: 1, evenings: 2 });
+    expect(erik.name).toBe('Erik'); // latest spelling when there is no player list
+
+    const shown = buildRecords(sessions, undefined, registry).find(r => r.key === 'ref:R-erik')!;
+    expect(shown.name).toBe('Erik Schwarz');
+    expect(buildOverview(sessions, undefined, registry).players).toBe(2);
+  });
+
+  it('counts a name without identity as the known person (display name, alias, or the same name elsewhere)', () => {
+    const sessions = [
+      eveningWithRefs('a', '2026-03-01T18:00:00Z', [['Erik Schwarz', 'Ben', 3, 1]], { 'Erik Schwarz': 'R-erik', Ben: 'R-ben' }),
+      evening('b', '2026-04-01T18:00:00Z', [['erik', 'Ben', 2, 0]]), // typed without identity: alias "erik"
+      evening('c', '2026-05-01T18:00:00Z', [['ERIK  SCHWARZ', 'Ben', 1, 0]]), // same name as the identified player
+    ];
+    const records = buildRecords(sessions, undefined, registry);
+    expect(records.length).toBe(2);
+    expect(records.find(r => r.key === 'ref:R-erik')).toMatchObject({ games: 3, wins: 3 });
+    // without the list the same name still joins the identified player
+    const noList = buildRecords(sessions);
+    expect(noList.find(r => r.key === 'ref:R-erik')!.games).toBe(2); // "ERIK  SCHWARZ" joins, the alias "erik" does not
+    expect(noList.some(r => r.key === 'erik')).toBe(true);
+  });
+
+  it('keeps two people apart who carry the same name but different identities', () => {
+    const sessions = [
+      eveningWithRefs('a', '2026-03-01T18:00:00Z', [['Tim', 'Ben', 3, 1]], { Tim: 'R-t1' }),
+      eveningWithRefs('b', '2026-04-01T18:00:00Z', [['Tim', 'Ben', 0, 2]], { Tim: 'R-t2' }),
+      evening('c', '2026-05-01T18:00:00Z', [['Tim', 'Ben', 1, 1]]), // which Tim? the name decides nothing
+    ];
+    const keys = buildRecords(sessions).map(r => r.key).sort();
+    expect(keys).toEqual(['ben', 'ref:R-t1', 'ref:R-t2', 'tim']);
+  });
+
+  it('counts the title of an evening for the right person', () => {
+    const sessions = [
+      eveningWithRefs('a', '2026-03-01T18:00:00Z', [['Erik Schwarz', 'Ben', 3, 1]], { 'Erik Schwarz': 'R-erik', Ben: 'R-ben' }),
+      eveningWithRefs('b', '2026-11-06T18:00:00Z', [['Erik', 'Ben', 5, 1]], { Erik: 'R-erik', Ben: 'R-ben' }),
+    ];
+    const records = buildRecords(sessions, undefined, registry);
+    expect(records.find(r => r.key === 'ref:R-erik')!.titles).toBe(2);
+    expect(records.find(r => r.key === 'ref:R-ben')!.titles).toBe(0);
+  });
+
+  it('finds the meetings of two people by their keys', () => {
+    const sessions = [
+      eveningWithRefs('a', '2026-03-01T18:00:00Z', [['Erik Schwarz', 'Ben', 3, 1]], { 'Erik Schwarz': 'R-erik', Ben: 'R-ben' }),
+      eveningWithRefs('b', '2026-11-06T18:00:00Z', [['Ben', 'Erik', 2, 2]], { Erik: 'R-erik', Ben: 'R-ben' }),
+    ];
+    const h = headToHead(sessions, 'ref:R-erik', 'ref:R-ben', undefined, registry);
+    expect(h).toMatchObject({ games: 2, winsA: 1, draws: 1, winsB: 0, goalsA: 5, goalsB: 3 });
+  });
+});
