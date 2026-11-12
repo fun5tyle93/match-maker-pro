@@ -38,6 +38,7 @@ import { findNameCandidates, sameName } from '@/lib/nameMatching';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlayerRegistry } from '@/hooks/usePlayerRegistry';
 import { PlayerNameField, PickedPlayer } from '@/components/PlayerNameField';
+import { LeagueCheckCard } from '@/components/LeagueCheckCard';
 import { exportLeagueToXLSX, exportLeagueToPDF } from '@/lib/exportActions';
 import { cn } from '@/lib/utils';
 
@@ -465,6 +466,8 @@ const Leagues = () => {
                     </div>
                   </CardHeader>
                 </Card>
+
+                {isAdmin && <LeagueCheckCard league={selectedLeague} />}
 
                 {/* Standings Table — eternal or normal */}
                 {selectedLeague.isEternal ? (

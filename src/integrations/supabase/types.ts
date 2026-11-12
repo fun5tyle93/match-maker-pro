@@ -37,6 +37,69 @@ export type Database = {
           },
         ]
       }
+      league_opening_balances: {
+        Row: {
+          championships: number
+          draws: number
+          goal_difference: number
+          goals_against: number
+          goals_for: number
+          league_id: string
+          losses: number
+          player_ref: string
+          points: number
+          points_against: number
+          updated_at: string
+          vice_championships: number
+          wins: number
+        }
+        Insert: {
+          championships?: number
+          draws?: number
+          goal_difference?: number
+          goals_against?: number
+          goals_for?: number
+          league_id: string
+          losses?: number
+          player_ref: string
+          points?: number
+          points_against?: number
+          updated_at?: string
+          vice_championships?: number
+          wins?: number
+        }
+        Update: {
+          championships?: number
+          draws?: number
+          goal_difference?: number
+          goals_against?: number
+          goals_for?: number
+          league_id?: string
+          losses?: number
+          player_ref?: string
+          points?: number
+          points_against?: number
+          updated_at?: string
+          vice_championships?: number
+          wins?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_opening_balances_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_opening_balances_player_ref_fkey"
+            columns: ["player_ref"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leagues: {
         Row: {
           created_at: string

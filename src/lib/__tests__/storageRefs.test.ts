@@ -50,7 +50,9 @@ const fake = vi.hoisted(() => {
           rows = rows.map(r => Object.fromEntries(columns.map(c => [c, r[c] ?? null])));
         }
         for (const row of rows) {
-          const existing = mode === 'upsert' ? state.db[table].find(r => r.id === row.id) : undefined;
+          // An upsert merges by primary key: id, or (league_id, player_ref) for the opening balances
+          const keyOf = (r: Row) => (r.id !== undefined ? `id:${r.id}` : r.league_id !== undefined && r.player_ref !== undefined ? `${r.league_id}|${r.player_ref}` : undefined);
+          const existing = mode === 'upsert' && keyOf(row) !== undefined ? state.db[table].find(r => keyOf(r) === keyOf(row)) : undefined;
           if (existing) Object.assign(existing, row);
           else state.db[table].push({ id: `gen-${state.db[table].length + 1}`, ...row });
         }
@@ -279,5 +281,53 @@ describe('loadPlayerRegistry', () => {
     seed(true);
     state.failOn = (_mode, table) => (table === 'players' ? { message: 'permission denied for table players' } : false);
     await expect((await freshStorage()).loadPlayerRegistry()).rejects.toBeTruthy();
+  });
+});
+
+describe('opening balances of the league check', () => {
+  const numbers = { wins: 1, draws: 2, losses: 3, goalsFor: 4, goalsAgainst: 5, points: 6, pointsAgainst: 7, goalDifference: -1, championships: 8, viceChampionships: 9 };
+  const dbRow = (league: string, ref: string, extra: Record<string, unknown> = {}) => ({
+    league_id: league, player_ref: ref, wins: 1, draws: 2, losses: 3, goals_for: 4, goals_against: 5, points: 6, points_against: 7,
+    goal_difference: -1, championships: 8, vice_championships: 9, ...extra,
+  });
+
+  it('reads the opening balances of one league by player identity', async () => {
+    seed(true);
+    state.db.league_opening_balances = [dbRow('L1', 'R-erik'), dbRow('L2', 'R-other')];
+    const loaded = await (await freshStorage()).loadOpeningBalances('L1');
+    expect([...loaded!.keys()]).toEqual(['R-erik']);
+    expect(loaded!.get('R-erik')).toEqual(numbers);
+  });
+
+  it('is null when the table does not exist, and throws for other errors', async () => {
+    seed(true);
+    state.failOn = (_m, table) => (table === 'league_opening_balances' ? { code: '42P01', message: 'relation does not exist' } : false);
+    expect(await (await freshStorage()).loadOpeningBalances('L1')).toBeNull();
+    state.failOn = (_m, table) => (table === 'league_opening_balances' ? { message: 'permission denied' } : false);
+    await expect((await freshStorage()).loadOpeningBalances('L1')).rejects.toBeTruthy();
+  });
+
+  it('writes the numbers into the right columns and removes the rows that are no longer wanted, after writing', async () => {
+    seed(true);
+    state.db.league_opening_balances = [dbRow('L1', 'R-old'), dbRow('L1', 'R-erik', { points: 99 }), dbRow('L2', 'R-old')];
+    const storage = await freshStorage();
+    state.ops = [];
+    await storage.saveOpeningBalances('L1', [{ ref: 'R-erik', opening: numbers }, { ref: 'R-ben', opening: { ...numbers, points: 11 } }]);
+    const mine = state.db.league_opening_balances.filter(r => r.league_id === 'L1');
+    expect(mine.map(r => r.player_ref).sort()).toEqual(['R-ben', 'R-erik']);
+    expect(mine.find(r => r.player_ref === 'R-erik')).toMatchObject({ points: 6, goals_for: 4, goal_difference: -1, vice_championships: 9 });
+    expect(mine.find(r => r.player_ref === 'R-ben')!.points).toBe(11);
+    // another league is never touched
+    expect(state.db.league_opening_balances.filter(r => r.league_id === 'L2').map(r => r.player_ref)).toEqual(['R-old']);
+    expect(state.ops.indexOf('delete:league_opening_balances')).toBeGreaterThan(state.ops.indexOf('upsert:league_opening_balances'));
+  });
+
+  it('removes nothing when writing fails', async () => {
+    seed(true);
+    state.db.league_opening_balances = [dbRow('L1', 'R-old')];
+    const storage = await freshStorage();
+    state.failOn = (mode, table) => mode === 'upsert' && table === 'league_opening_balances';
+    await expect(storage.saveOpeningBalances('L1', [{ ref: 'R-erik', opening: numbers }])).rejects.toBeTruthy();
+    expect(state.db.league_opening_balances.map(r => r.player_ref)).toEqual(['R-old']);
   });
 });
