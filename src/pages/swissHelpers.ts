@@ -1,10 +1,11 @@
 import { saveToHistory, defaultRankingRule } from '@/lib/storage';
 import { sessionFinalRanking } from '@/lib/swissRanking';
 import { exportTrainingToXLSX, exportTrainingToPDF } from '@/lib/exportActions';
-import { TrainingSession, PlayerStats, Match } from '@/types';
+import { TrainingSession, PlayerStats, Match, Player } from '@/types';
 import { SwissSession } from '@/types/swiss';
 import { computeSwissStats } from '@/lib/swissPairing';
 import { toPlayoffMatches, getPlayoffFinalists, PLAYOFF_PLACEHOLDER_PREFIX } from '@/lib/tournamentPhases';
+import { titleHoldersFromOrder } from '@/lib/ranking';
 import { toast } from 'sonner';
 
 export function convertSwissToTrainingSession(s: SwissSession): TrainingSession {
@@ -42,7 +43,7 @@ export function convertSwissToTrainingSession(s: SwissSession): TrainingSession 
 /**
  * Final results of a Swiss session: Vorrunde stats plus all played playoff matches.
  * Champion / runner-up come from the playoff final when a playoff was played,
- * otherwise from the Vorrunden-Rangliste.
+ * otherwise from the Vorrunden-Rangliste. A player out of competition ("a.K.") gets no title, the next one moves up.
  */
 export function computeFinalSwissStats(s: SwissSession): {
   stats: PlayerStats[];
@@ -96,35 +97,39 @@ export function computeFinalSwissStats(s: SwissSession): {
 
   const stats = Array.from(acc.values());
 
-  // Either may stay undefined: fewer than two players, or a playoff final without a runner-up yet
-  let championName: string | undefined = swissStats[0]?.player.name;
-  let viceChampionName: string | undefined = swissStats[1]?.player.name;
+  // The order the titles come from: after a finished playoff the two finalists, then the rest of the final ranking
+  // (SO § 9 Abs. 6); otherwise the standings of the group. Players out of competition ("a.K.") are skipped, the next
+  // player moves up. Either title may stay undefined: fewer than two players, or no one left who is eligible.
+  const final = sessionFinalRanking(convertSwissToTrainingSession(s));
+  const finalists = playoffMatches.length > 0
+    ? getPlayoffFinalists(toPlayoffMatches(
+        playoffMatches.map(pm => ({
+          id: pm.id,
+          round: pm.round,
+          homePlayer: pm.homePlayer ?? { id: `${PLAYOFF_PLACEHOLDER_PREFIX}h-${pm.id}`, name: '–' },
+          awayPlayer: pm.awayPlayer ?? { id: `${PLAYOFF_PLACEHOLDER_PREFIX}a-${pm.id}`, name: '–' },
+          homeScore: pm.homeScore,
+          awayScore: pm.awayScore,
+          isCompleted: pm.isCompleted,
+          phase: 'playoff' as const,
+          playoffRound: pm.round,
+          matchNumber: pm.matchNumber,
+          isBye: pm.isBye ?? false,
+        })),
+      ))
+    : { champion: null, runnerUp: null };
 
-  if (playoffMatches.length > 0) {
-    const { champion, runnerUp } = getPlayoffFinalists(toPlayoffMatches(
-      playoffMatches.map(pm => ({
-        id: pm.id,
-        round: pm.round,
-        homePlayer: pm.homePlayer ?? { id: `${PLAYOFF_PLACEHOLDER_PREFIX}h-${pm.id}`, name: '–' },
-        awayPlayer: pm.awayPlayer ?? { id: `${PLAYOFF_PLACEHOLDER_PREFIX}a-${pm.id}`, name: '–' },
-        homeScore: pm.homeScore,
-        awayScore: pm.awayScore,
-        isCompleted: pm.isCompleted,
-        phase: 'playoff' as const,
-        playoffRound: pm.round,
-        matchNumber: pm.matchNumber,
-        isBye: pm.isBye ?? false,
-      })),
-    ));
-    if (champion) {
-      championName = champion.name;
-      viceChampionName = runnerUp?.name;
-    }
+  let titleOrder: Player[] = swissStats.map(st => st.player);
+  if (finalists.champion) {
+    const top = [finalists.champion, ...(finalists.runnerUp ? [finalists.runnerUp] : [])];
+    titleOrder = [...top, ...(final ?? []).map(r => r.player).filter(p => !top.some(t => t.id === p.id))];
   }
+  const { winner, runnerUp } = titleHoldersFromOrder(titleOrder);
+  const championName = winner?.name;
+  const viceChampionName = runnerUp?.name;
 
   // Final ranking order: by the round of elimination, then points, goal difference, opponent (SO § 9 Abs. 6);
   // without a playoff the Swiss standings decide. The numbers in `stats` stay whole (win 2, loss 0) for the leagues.
-  const final = sessionFinalRanking(convertSwissToTrainingSession(s));
   const order = (final ? final.map(r => r.player.id) : swissStats.map(st => st.player.id));
   const position = (id: string) => { const i = order.indexOf(id); return i === -1 ? order.length : i; };
   stats.sort((a, b) => position(a.player.id) - position(b.player.id));

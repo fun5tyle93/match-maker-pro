@@ -14,6 +14,7 @@ import {
   rankBlocksDtkv,
   rankPlayers,
   sortRows,
+  titleHoldersFromOrder,
   winnerAndRunnerUp,
 } from '@/lib/ranking';
 import { calculatePlayerStats } from '@/lib/pairingGenerator';
@@ -414,5 +415,38 @@ describe('players out of competition ("a.K.")', () => {
     ], 'dtkv2026');
     expect(r.places.slice(1)).toEqual([2, 2, 2]);
     expect(ids(leagueTitleHolders(r))).toEqual([undefined, undefined]);
+  });
+});
+
+
+describe('titleHoldersFromOrder (Swiss system: an order without shared places)', () => {
+  const names = (order: string[]) => {
+    const r = titleHoldersFromOrder(order.map(n => ({ id: n, name: n })));
+    return [r.winner?.id, r.runnerUp?.id];
+  };
+
+  it('is the first two players when nobody is out of competition', () => {
+    expect(names(['A', 'B', 'C', 'D'])).toEqual(['A', 'B']);
+  });
+
+  it('lets the next players move up', () => {
+    expect(names(['A a.K.', 'B', 'C'])).toEqual(['B', 'C']);
+    expect(names(['A', 'B a.K.', 'C'])).toEqual(['A', 'C']);
+    expect(names(['A a.K.', 'B', 'C', 'D'])).toEqual(['B', 'C']);
+  });
+
+  it('skips several players out of competition', () => {
+    expect(names(['A a.K.', 'B a.K.', 'C'])).toEqual(['C', undefined]);
+    expect(names(['A a.K.', 'B', 'C a.K.', 'D'])).toEqual(['B', 'D']);
+  });
+
+  it('gives no title when nobody is eligible, and no runner-up with a single player', () => {
+    expect(names(['A a.K.'])).toEqual([undefined, undefined]);
+    expect(names(['A'])).toEqual(['A', undefined]);
+    expect(names([])).toEqual([undefined, undefined]);
+  });
+
+  it('does not change anything when the player out of competition is further back', () => {
+    expect(names(['A', 'B', 'C a.K.'])).toEqual(['A', 'B']);
   });
 });
