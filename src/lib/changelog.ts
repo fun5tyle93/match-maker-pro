@@ -23,7 +23,7 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '3.5.1', date: '2026-11-13', kind: 'patch', prs: [],
+    version: '3.5.1', date: '2026-11-13', kind: 'patch', prs: [43],
     title: 'Zusammenführen: Hinweise ergänzt',
     changes: [
       'Nach dem Zusammenführen und Zuordnen weist die App auf die Ligenprüfung „berechnet = gespeichert“ hin.',
