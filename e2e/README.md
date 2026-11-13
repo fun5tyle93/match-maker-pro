@@ -19,6 +19,7 @@ node e2e/complete-evening.mjs http://127.0.0.1:4173
 | `player-identity.mjs <url>` (`NO_REGISTRY=1`) | Feste Spieler-Identität: Übernahme ohne Frage über die Referenz („Erik“ landet auf der Zeile „Erik Schwarz“), gespeicherte Referenzen bleiben erhalten, Statistik führt Schreibweisen zusammen und zeigt den Anzeigenamen | zustandsbehafteter Mock mit `players`, `player_aliases` und `player_ref`-Spalten |
 | `player-picker.mjs <url> [ausgabeordner]` (`NO_REGISTRY=1`, `W=390`) | Spielereingabe mit Spielerliste: Vorschläge beim Tippen, Alias, Verschreiber mit Rückfrage („Ja, das ist …“), Neuanlage nach Bestätigung, doppelter Spieler abgelehnt, Abend und Partien speichern Identität und stabile ID, Liga-Verwaltung; ohne Spielerliste freie Eingabe wie früher | zustandsbehafteter Mock mit `players`-Anlage (`Prefer: return=representation`) |
 | `league-check.mjs <url> [ausgabeordner]` (`W=390`) | Ligenprüfung „berechnet = gespeichert“: stimmige Liga, Handänderung wird als Abweichung gezeigt, „Als neuen Stand übernehmen“ setzt den Startbestand neu, die gespeicherte Tabelle bleibt unverändert, die Prüfung schreibt nichts | zustandsbehafteter Mock mit zusammengesetztem Schlüssel für `league_opening_balances` |
+| `player-admin.mjs <url> [ausgabeordner]` (`W=390`) | Admin-Seite „Spielerliste“ (`/spieler`): nur für Admins, Suche (auch über andere Namen), Umbenennen, Zusammenführen (auch die Ablehnung bei gleicher Liga), Löschen nur unbenutzter Spieler, Liga-Zeilen ohne Spieler zuordnen; Kopfzeile ohne Überlauf von 320 bis 1440 px | Mock bildet die Datenbankfunktionen `rename_player`/`merge_players`, Fehlercodes und Fremdschlüssel nach |
 | `csp-e2e.mjs` | alle Seiten und Exporte laufen unter der echten CSP aus `vercel.json` | eigener kleiner Server mit den Headern aus `vercel.json`; startet ohne Argument (Port 4180) |
 
 Gemeinsame Bausteine:
@@ -26,3 +27,5 @@ Gemeinsame Bausteine:
 - **Admin-Login simulieren:** eine Session mit künstlichem JWT unter `sb-swuwjjmspplzfguapvty-auth-token` in den `localStorage` legen (`context.addInitScript`).
 - **Supabase mocken:** `context.route('https://swuwjjmspplzfguapvty.supabase.co/**', …)`. GET liefert die Tabellen, POST/PATCH/DELETE verändern sie.
 - **Playwright:** `/opt/node-tools/node_modules/playwright`, Chromium mit `executablePath: '/opt/pw-browsers/chromium'` und `--no-sandbox`.
+
+Datenbankfunktionen der Spielerliste testet `scripts/test-player-admin.sql` (Probe-Datenbank, Transaktion mit Rollback): `scripts/db-rehearsal.sh <backup-ordner> supabase/migrations/20261114100000_player_admin.sql`, dann `psql -h /var/tmp/mm-pg -p 54329 -U postgres -v ON_ERROR_STOP=1 -f scripts/test-player-admin.sql` (erwartet: `ALLE FAELLE OK`).

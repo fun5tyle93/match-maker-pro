@@ -9,6 +9,7 @@ import { playerKey, PlayerRegistry } from '@/lib/playerRegistry';
  */
 export function usePlayerRegistry(enabled: boolean) {
   const [registry, setRegistry] = useState<PlayerRegistry | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (!enabled) return;
@@ -22,7 +23,7 @@ export function usePlayerRegistry(enabled: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, version]);
 
   /** Adds a new person to the list; resolves to the stored player. Throws when it cannot be saved. */
   const addPlayer = useCallback(async (name: string): Promise<{ ref: string; name: string }> => {
@@ -36,5 +37,8 @@ export function usePlayerRegistry(enabled: boolean) {
     return { ref: created.id, name: created.displayName };
   }, []);
 
-  return { registry, addPlayer };
+  /** Reads the list again, for example after a player was renamed or merged. */
+  const reload = useCallback(() => setVersion(v => v + 1), []);
+
+  return { registry, addPlayer, reload };
 }

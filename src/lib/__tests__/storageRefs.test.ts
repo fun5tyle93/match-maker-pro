@@ -6,6 +6,7 @@ const fake = vi.hoisted(() => {
   const state = {
     db: {} as Record<string, Row[]>,
     ops: [] as string[],
+    rpcCalls: [] as { name: string; args: unknown }[],
     failOn: null as null | ((mode: string, table: string) => boolean | { code?: string; message: string }),
   };
 
@@ -14,6 +15,7 @@ const fake = vi.hoisted(() => {
     let payload: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     let range: [number, number] | null = null;
     let single = false;
+    let returning = false; // update(...).select(): the changed rows come back
     const filters: Array<(r: Row) => boolean> = [];
 
     const matching = () => (state.db[table] ?? []).filter(r => filters.every(f => f(r)));
@@ -41,7 +43,9 @@ const fake = vi.hoisted(() => {
         const doomed = new Set(matching());
         state.db[table] = state.db[table].filter(r => !doomed.has(r));
       } else if (mode === 'update') {
-        matching().forEach(r => Object.assign(r, payload));
+        const changed = matching();
+        changed.forEach(r => Object.assign(r, payload));
+        if (returning) return { data: changed.map(r => ({ ...r })), error: null };
       } else {
         let rows: Row[] = Array.isArray(payload) ? payload : [payload];
         // Like PostgREST: the columns of a batch are the keys of all its rows, a row without one of them gets null
@@ -61,8 +65,9 @@ const fake = vi.hoisted(() => {
     };
 
     const api: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      select: () => api,
+      select: () => ((returning = mode === 'update'), api),
       eq: (k: string, v: unknown) => (filters.push(r => r[k] === v), api),
+      is: (k: string, v: null) => (filters.push(r => (r[k] ?? null) === v), api),
       in: (k: string, vs: unknown[]) => (filters.push(r => vs.includes(r[k])), api),
       order: () => api,
       range: (a: number, b: number) => ((range = [a, b]), api),
@@ -77,7 +82,14 @@ const fake = vi.hoisted(() => {
     return api;
   }
 
-  return { state, supabase: { from: (table: string) => builder(table) } };
+  // supabase.rpc(name, args): protokolliert den Aufruf; der Fehler kommt aus state.failOn (Modus 'rpc', Tabelle = Name)
+  const rpc = (name: string, args: unknown) => {
+    state.ops.push(`rpc:${name}`);
+    state.rpcCalls.push({ name, args });
+    const failure = state.failOn?.('rpc', name);
+    return Promise.resolve({ data: null, error: failure ? (typeof failure === 'object' ? failure : { message: `injected failure: rpc:${name}` }) : null });
+  };
+  return { state, supabase: { from: (table: string) => builder(table), rpc } };
 });
 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: fake.supabase }));
@@ -117,6 +129,7 @@ const seed = (withColumns: boolean) => {
 
 beforeEach(() => {
   state.ops = [];
+  state.rpcCalls = [];
   state.failOn = null;
 });
 
@@ -329,5 +342,73 @@ describe('opening balances of the league check', () => {
     state.failOn = (mode, table) => mode === 'upsert' && table === 'league_opening_balances';
     await expect(storage.saveOpeningBalances('L1', [{ ref: 'R-erik', opening: numbers }])).rejects.toBeTruthy();
     expect(state.db.league_opening_balances.map(r => r.player_ref)).toEqual(['R-old']);
+  });
+});
+
+
+describe('player list administration', () => {
+  const stat = (id: string, league: string, name: string, ref: string | null, points = 1) => ({ id, league_id: league, player_id: `x-${id}`, player_name: name, player_ref: ref, points, championships: 0 });
+  const seedAdmin = () => {
+    seed(true);
+    state.db.players = [{ id: 'R-erik', display_name: 'Erik Schwarz' }, { id: 'R-ben', display_name: 'Ben' }, { id: 'R-neu', display_name: 'Neu Angelegt' }];
+    state.db.player_aliases = [{ alias: 'erik', player_id: 'R-erik' }];
+    state.db.player_stats = [stat('s1', 'L1', 'Erik Schwarz', 'R-erik', 9), stat('s2', 'L1', 'Doppelt', null, 4), stat('s3', 'L1', 'Doppelt', null, 2)];
+  };
+
+  it('reads everything the page shows and counts it', async () => {
+    seedAdmin();
+    const data = await (await freshStorage()).loadPlayerAdmin();
+    expect(data.players.map(p => p.displayName)).toEqual(['Ben', 'Erik Schwarz', 'Neu Angelegt']);
+    const erik = data.players.find(p => p.id === 'R-erik')!;
+    expect(erik).toMatchObject({ aliases: ['erik'], evenings: 1, matches: 1 });
+    expect(erik.leagueRows).toEqual([{ leagueId: 'L1', leagueName: 'Liga' }]);
+    expect(data.unassigned.map(r => `${r.playerName}:${r.points}`)).toEqual(['Doppelt:4', 'Doppelt:2']);
+  });
+
+  it('renames and merges through the database functions, with exactly these arguments', async () => {
+    seedAdmin();
+    const storage = await freshStorage();
+    await storage.renamePlayer('R-erik', 'Erik S.');
+    await storage.mergePlayers('R-neu', 'R-ben');
+    expect(state.rpcCalls).toEqual([
+      { name: 'rename_player', args: { p_player: 'R-erik', p_new_name: 'Erik S.' } },
+      { name: 'merge_players', args: { p_from: 'R-neu', p_into: 'R-ben' } },
+    ]);
+  });
+
+  it('throws the error of the database instead of pretending it worked', async () => {
+    seedAdmin();
+    const storage = await freshStorage();
+    state.failOn = (mode, name) => (mode === 'rpc' && name === 'rename_player' ? { code: '23505', message: 'duplicate key' } : false);
+    await expect(storage.renamePlayer('R-erik', 'Ben')).rejects.toMatchObject({ code: '23505' });
+    state.failOn = (mode, name) => (mode === 'rpc' && name === 'merge_players' ? { code: 'P0001', message: 'Beide Spieler stehen in der Liga "Liga".' } : false);
+    await expect(storage.mergePlayers('R-erik', 'R-ben')).rejects.toMatchObject({ message: expect.stringContaining('Beide Spieler') });
+  });
+
+  it('deletes exactly one player and throws when the database refuses', async () => {
+    seedAdmin();
+    const storage = await freshStorage();
+    await storage.deletePlayer('R-neu');
+    expect(state.db.players.map(p => p.id)).toEqual(['R-erik', 'R-ben']);
+    state.failOn = (mode, table) => (mode === 'delete' && table === 'players' ? { code: '23503', message: 'still referenced' } : false);
+    await expect(storage.deletePlayer('R-erik')).rejects.toMatchObject({ code: '23503' });
+    expect(state.db.players.length).toBe(2);
+  });
+
+  it('gives a league row without a player its player and its name, and touches nothing else', async () => {
+    seedAdmin();
+    const storage = await freshStorage();
+    await storage.assignLeagueRow('s2', 'R-ben', 'Ben');
+    expect(state.db.player_stats.find(r => r.id === 's2')).toMatchObject({ player_ref: 'R-ben', player_name: 'Ben', points: 4 });
+    expect(state.db.player_stats.find(r => r.id === 's3')).toMatchObject({ player_ref: null, player_name: 'Doppelt' });
+    expect(state.db.player_stats.find(r => r.id === 's1')).toMatchObject({ player_ref: 'R-erik', player_name: 'Erik Schwarz' });
+  });
+
+  it('never changes a league row that already has a player, and says so', async () => {
+    seedAdmin();
+    const storage = await freshStorage();
+    await expect(storage.assignLeagueRow('s1', 'R-ben', 'Ben')).rejects.toThrow(/schon einen Spieler/);
+    expect(state.db.player_stats.find(r => r.id === 's1')).toMatchObject({ player_ref: 'R-erik', player_name: 'Erik Schwarz' });
+    await expect(storage.assignLeagueRow('gibt-es-nicht', 'R-ben', 'Ben')).rejects.toThrow();
   });
 });

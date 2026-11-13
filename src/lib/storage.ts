@@ -6,6 +6,7 @@ import { SwissSession } from '@/types/swiss';
 import { PLAYOFF_PLACEHOLDER_PREFIX } from './tournamentPhases';
 import { buildRegistry, EMPTY_REGISTRY, PlayerRegistry } from './playerRegistry';
 import type { Numbers } from './leagueStandings';
+import { buildPlayerAdmin, PlayerAdminData } from './playerAdmin';
 import { sortMatches } from '@/lib/tables';
 
 // ─── Helper: Fetch all rows, paging past the PostgREST row limit (default 1000) ───
@@ -158,6 +159,51 @@ export async function createPlayer(displayName: string): Promise<{ id: string; d
     if (ref) return { id: ref, displayName: registry.names.get(ref) ?? name };
   }
   throw error ?? new Error('Spieler konnte nicht angelegt werden');
+}
+
+// ─── Player list administration (page "Spielerliste") ───
+
+/** Everything the administration page shows: the players with their use, and league rows without a player. */
+export async function loadPlayerAdmin(): Promise<PlayerAdminData> {
+  const [players, aliases, trainingPlayers, matches, leagueRows, leagues] = await Promise.all([
+    fetchAll(() => supabase.from('players').select('id, display_name').order('id', { ascending: true })),
+    fetchAll(() => supabase.from('player_aliases').select('alias, player_id').order('alias', { ascending: true })),
+    fetchAll(() => supabase.from('training_players').select('player_ref').order('id', { ascending: true })),
+    fetchAll(() => supabase.from('matches').select('home_player_ref, away_player_ref').order('id', { ascending: true })),
+    fetchAll(() => supabase.from('player_stats').select('id, league_id, player_name, player_ref, points, championships').order('id', { ascending: true })),
+    fetchAll(() => supabase.from('leagues').select('id, name').order('id', { ascending: true })),
+  ]);
+  return buildPlayerAdmin({ players, aliases, trainingPlayers, matches, leagueRows, leagues });
+}
+
+/** Renames a player; the old name stays as another name. Throws on a database error. */
+export async function renamePlayer(playerId: string, newName: string): Promise<void> {
+  const { error } = await supabase.rpc('rename_player', { p_player: playerId, p_new_name: newName });
+  if (error) throw error;
+}
+
+/** Merges player `fromId` into `intoId` (all references move, the name becomes another name). Throws on a database error. */
+export async function mergePlayers(fromId: string, intoId: string): Promise<void> {
+  const { error } = await supabase.rpc('merge_players', { p_from: fromId, p_into: intoId });
+  if (error) throw error;
+}
+
+/** Deletes a player. The database refuses (23503) when he is still used anywhere. */
+export async function deletePlayer(playerId: string): Promise<void> {
+  const { error } = await supabase.from('players').delete().eq('id', playerId);
+  if (error) throw error;
+}
+
+/** Gives a league row without a player its player. Only a row that has none is changed. */
+export async function assignLeagueRow(rowId: string, playerId: string, displayName: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('player_stats')
+    .update({ player_ref: playerId, player_name: displayName })
+    .eq('id', rowId)
+    .is('player_ref', null)
+    .select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error('Die Zeile hat schon einen Spieler oder gibt es nicht mehr.');
 }
 
 // ─── Opening balances of the league check ───
