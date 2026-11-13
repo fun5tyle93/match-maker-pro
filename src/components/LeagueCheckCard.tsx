@@ -152,11 +152,6 @@ export function LeagueCheckCard({ league }: { league: League }) {
                 Nicht geprüft (keine feste Spieler-Identität): {check.notChecked.join(', ')}
               </p>
             )}
-            {check.unsupported.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Schweizer Turniere werden noch nicht mitgerechnet: {check.unsupported.join(', ')}. Das Ergebnis ist unvollständig.
-              </p>
-            )}
 
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={run} disabled={saving}>Erneut prüfen</Button>

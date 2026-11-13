@@ -39,7 +39,7 @@ describe('checkLeague', () => {
   it('passes when every row is the opening balance plus the evenings', () => {
     const { league, openings } = consistent({ Anna: { wins: 10, points: 20, championships: 3 }, Ben: { losses: 4 } });
     const result = checkLeague(league, sessions, openings);
-    expect(result).toMatchObject({ ok: true, differences: [], missingRows: [], notChecked: [], unsupported: [], checkedRows: 3 });
+    expect(result).toMatchObject({ ok: true, differences: [], missingRows: [], notChecked: [], checkedRows: 3 });
   });
 
   it('reports every number that was changed by hand, with computed and stored value', () => {
@@ -76,14 +76,6 @@ describe('checkLeague', () => {
     expect(result.ok).toBe(true);
     expect(result.notChecked).toEqual(['Ohne Identität']);
     expect(result.checkedRows).toBe(3);
-  });
-
-  it('leaves out Swiss tournaments and says that the result is incomplete', () => {
-    const { league, openings } = consistent({});
-    const swiss = evening('sw', '2026-05-01T18:00:00Z', { tournamentType: 'swiss', name: 'Turnier' });
-    const result = checkLeague(league, [...sessions, swiss], openings);
-    expect(result.unsupported).toEqual(['Turnier']);
-    expect(result.ok).toBe(true);
   });
 
   it('checks the eternal table with the same rule (only points, points against and titles come from evenings)', () => {

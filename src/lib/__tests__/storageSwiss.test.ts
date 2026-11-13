@@ -186,6 +186,26 @@ describe('running Swiss tournament', () => {
   });
 });
 
+describe('the lot of a Swiss tournament in the saved evening', () => {
+  it('loadHistory reads the lot from the stored state (swissLot), and leaves it out when there is none', async () => {
+    await storage.swissStateSupported();
+    await storage.saveSwissSession(asSession(uuid(100)) as never, swissState(uuid(100), { lot: { [uuid(1)]: 0.25, [uuid(2)]: 0.75 } }) as never);
+    await storage.saveSwissSession(asSession(uuid(101)) as never, swissState(uuid(101)) as never);
+    sessionRow(uuid(100)).is_completed = true;
+    sessionRow(uuid(101)).is_completed = true;
+    const history = await storage.loadHistory();
+    expect(history.find(h => h.id === uuid(100))?.swissLot).toEqual({ [uuid(1)]: 0.25, [uuid(2)]: 0.75 });
+    expect(history.find(h => h.id === uuid(101))?.swissLot).toBeUndefined();
+  });
+
+  it('ignores a lot that is not a map of numbers', async () => {
+    await storage.swissStateSupported();
+    await storage.saveSwissSession(asSession(uuid(100)) as never, swissState(uuid(100), { lot: ['x'] }) as never);
+    sessionRow(uuid(100)).is_completed = true;
+    expect((await storage.loadHistory())[0].swissLot).toBeUndefined();
+  });
+});
+
 describe('empty slots of the playoff bracket and byes', () => {
   it('are stored with a valid uuid and the name "–", and read back as empty slots', async () => {
     await storage.swissStateSupported();

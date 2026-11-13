@@ -33,8 +33,6 @@ export interface LeagueCheck {
   missingRows: MissingRow[];
   /** rows without a fixed identity: they have no opening balance and cannot be checked */
   notChecked: string[];
-  /** transferred Swiss tournaments: their contribution cannot be computed yet, so the result is incomplete */
-  unsupported: string[];
   /** rows that were checked */
   checkedRows: number;
 }
@@ -60,9 +58,7 @@ const storedNumbers = (s: PlayerStats): Numbers =>
  * with numbers shows up as a difference.
  */
 export function checkLeague(league: League, sessions: TrainingSession[], openings: OpeningLookup): LeagueCheck {
-  const unsupported = sessions.filter(s => s.tournamentType === 'swiss').map(s => s.name ?? s.id);
-  const counted = sessions.filter(s => s.tournamentType !== 'swiss');
-  const booked = bookSessions(!!league.isEternal, counted);
+  const booked = bookSessions(!!league.isEternal, sessions);
   const { rows } = openingBalances(league.playerStats, booked);
 
   const differences: Difference[] = [];
@@ -91,7 +87,7 @@ export function checkLeague(league: League, sessions: TrainingSession[], opening
       if (computed !== stored[column]) differences.push({ name: row.stored.player.name, column, computed, stored: stored[column] });
     }
   }
-  return { ok: differences.length === 0 && missingRows.length === 0, differences, missingRows, notChecked, unsupported, checkedRows };
+  return { ok: differences.length === 0 && missingRows.length === 0, differences, missingRows, notChecked, checkedRows };
 }
 
 /**
@@ -99,8 +95,7 @@ export function checkLeague(league: League, sessions: TrainingSession[], opening
  * row with a fixed identity ("take over as the new state" after a deliberate manual change).
  */
 export function openingsFor(league: League, sessions: TrainingSession[]): { ref: string; opening: Numbers }[] {
-  const counted = sessions.filter(s => s.tournamentType !== 'swiss');
-  const { rows } = openingBalances(league.playerStats, bookSessions(!!league.isEternal, counted));
+  const { rows } = openingBalances(league.playerStats, bookSessions(!!league.isEternal, sessions));
   const result = rows.filter(r => r.stored?.player.ref).map(r => ({ ref: r.stored!.player.ref as string, opening: r.opening }));
   // Evenings that booked a player who has no row (any more): the opening balance cancels the contribution, so the
   // check stays quiet about it. Only for players with a fixed identity and only once per identity.

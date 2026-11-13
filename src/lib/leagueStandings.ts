@@ -10,6 +10,8 @@ import { League, Player, PlayerStats, TrainingSession } from '@/types';
 import { applySessionToLeague } from './leagueTransfer';
 import { sameName } from './nameMatching';
 import { rankSession } from './swissRanking';
+import { finalSwissResult } from './swissFinal';
+import { getPlayoffFlatMatches, getSwissMatches } from './tournamentPhases';
 import { leagueTitleHolders } from './ranking';
 
 /** Evening results as they are booked into a league: everybody's numbers, and who won / came second. */
@@ -25,7 +27,9 @@ export interface SessionResult {
  */
 export function sessionResult(session: TrainingSession): SessionResult {
   if (session.tournamentType === 'swiss') {
-    throw new Error(`Schweizer Turnier "${session.name ?? session.id}": Beitrag noch nicht umgesetzt`);
+    // the same calculation as the transfer of the tournament (computeFinalSwissStats)
+    const r = finalSwissResult(session.players, getSwissMatches(session.matches), getPlayoffFlatMatches(session.matches), session.swissLot);
+    return { stats: r.stats, firstPlace: r.championName, secondPlace: r.viceChampionName };
   }
   const ranked = rankSession(session);
   const { winner, runnerUp } = leagueTitleHolders(ranked);

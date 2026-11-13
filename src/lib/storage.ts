@@ -80,6 +80,14 @@ export function defaultRankingRule(): 'legacy' | 'dtkv2026' {
   return schemaFeatures.rankingRule ? 'dtkv2026' : 'legacy';
 }
 
+/** The drawn lot of a Swiss tournament from its stored state; undefined when there is none. */
+function toLot(state: unknown): Record<string, number> | undefined {
+  const lot = (state as { lot?: unknown } | null)?.lot;
+  if (!lot || typeof lot !== 'object' || Array.isArray(lot)) return undefined;
+  const entries = Object.entries(lot).filter((e): e is [string, number] => typeof e[1] === 'number');
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
 function toSession(row: any, players: Player[], matches: Match[]): TrainingSession {
   if ('ranking_rule' in row) schemaFeatures.rankingRule = true;
   if ('swiss_state' in row) schemaFeatures.swissState = true;
@@ -96,6 +104,7 @@ function toSession(row: any, players: Player[], matches: Match[]): TrainingSessi
     tournamentType: (row.tournament_type ?? 'training') as 'training' | 'swiss',
     rankingRule: row.ranking_rule === 'dtkv2026' ? 'dtkv2026' : 'legacy',
     deciderResults: Array.isArray(row.decider_results) ? row.decider_results : undefined,
+    swissLot: toLot(row.swiss_state),
   };
 }
 
