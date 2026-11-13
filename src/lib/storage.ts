@@ -261,7 +261,8 @@ export async function saveOpeningBalances(leagueId: string, entries: { ref: stri
 // ─── Leagues ───
 
 /** Rows of the given leagues, grouped by league (all rows, paged). */
-async function loadStatsByLeague(leagueIds: string[]): Promise<Map<string, any[]>> {
+type StatsRow = Parameters<typeof toPlayerStats>[0];
+async function loadStatsByLeague(leagueIds: string[]): Promise<Map<string, StatsRow[]>> {
   const statsRows = await fetchAll(() =>
     supabase
       .from('player_stats')
@@ -269,7 +270,7 @@ async function loadStatsByLeague(leagueIds: string[]): Promise<Map<string, any[]
       .in('league_id', leagueIds)
       .order('id', { ascending: true })
   );
-  const statsByLeague = new Map<string, any[]>();
+  const statsByLeague = new Map<string, StatsRow[]>();
   for (const s of statsRows) {
     statsByLeague.set(s.league_id, [...(statsByLeague.get(s.league_id) ?? []), s]);
   }
@@ -278,7 +279,7 @@ async function loadStatsByLeague(leagueIds: string[]): Promise<Map<string, any[]
 
 // Annual league: points, fewer points lost, goal difference, goals scored (SO § 2 Abs. 6);
 // eternal table: points, championships. The sort is stable, so rows that are level keep their order.
-const buildLeague = (row: any, stats: any[]): League => {
+const buildLeague = (row: Parameters<typeof toLeague>[0], stats: StatsRow[]): League => {
   const league = toLeague(row, stats);
   return { ...league, playerStats: sortRows(league.playerStats, !!league.isEternal) };
 };
@@ -328,7 +329,7 @@ export async function saveLeagueHeader(league: League): Promise<void> {
  */
 export async function saveLeagueRows(league: League, rows: PlayerStats[]): Promise<void> {
   if (rows.length === 0) return;
-  const existing: any[] = [];
+  const existing: { id: string; player_id: string }[] = [];
   for (const part of chunk(rows.map(r => r.player.id))) {
     const found = await fetchAll(() =>
       supabase.from('player_stats').select('id, player_id').eq('league_id', league.id).in('player_id', part).order('id', { ascending: true })
