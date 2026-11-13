@@ -279,6 +279,15 @@ export function leagueTitleHolders(ranked: Ranked): { winner?: Player; runnerUp?
   return { winner, runnerUp };
 }
 
+/**
+ * Champion and runner-up for the leagues from an order without shared places (Swiss system): players out of
+ * competition are skipped, so the next players move up.
+ */
+export function titleHoldersFromOrder(order: Player[]): { winner?: Player; runnerUp?: Player } {
+  const eligible = order.filter(p => !isOutOfCompetition(p.name));
+  return { winner: eligible[0], runnerUp: eligible[1] };
+}
+
 // ─── League tables ─────────────────────────────────────────────────────────
 
 /**
