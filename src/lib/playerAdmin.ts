@@ -4,6 +4,14 @@
  */
 import { normalizeName } from './nameMatching';
 
+/** The ten numbers of a league row (and of an opening balance). */
+export const STAT_KEYS = ['wins', 'draws', 'losses', 'goals_for', 'goals_against', 'points', 'points_against', 'goal_difference', 'championships', 'vice_championships'] as const;
+export type StatKey = (typeof STAT_KEYS)[number];
+export type StatNumbers = Record<StatKey, number>;
+
+const addNumbers = (a: StatNumbers, b: StatNumbers): StatNumbers =>
+  Object.fromEntries(STAT_KEYS.map(k => [k, a[k] + b[k]])) as StatNumbers;
+
 export interface PlayerAdminRow {
   id: string;
   displayName: string;
@@ -12,7 +20,7 @@ export interface PlayerAdminRow {
   /** evenings the player took part in (rows in training_players) */
   evenings: number;
   /** league rows of the player */
-  leagueRows: { leagueId: string; leagueName: string }[];
+  leagueRows: { leagueId: string; leagueName: string; stats: StatNumbers }[];
   /** matches with this player, as home or away player */
   matches: number;
 }
@@ -36,7 +44,7 @@ export interface PlayerAdminInput {
   aliases: { alias: string; player_id: string }[];
   trainingPlayers: { player_ref: string | null }[];
   matches: { home_player_ref: string | null; away_player_ref: string | null }[];
-  leagueRows: { id: string; league_id: string; player_name: string; player_ref: string | null; points: number; championships: number }[];
+  leagueRows: ({ id: string; league_id: string; player_name: string; player_ref: string | null } & StatNumbers)[];
   leagues: { id: string; name: string }[];
 }
 
@@ -48,6 +56,40 @@ export function matchesSearch(p: PlayerAdminRow, text: string): boolean {
   const query = normalizeName(text);
   if (query === '') return true;
   return [p.displayName, ...p.aliases].some(name => normalizeName(name).includes(query));
+}
+
+const pickStats = (r: StatNumbers): StatNumbers => Object.fromEntries(STAT_KEYS.map(k => [k, r[k]])) as StatNumbers;
+
+/** One line of the merge preview: what the league row of both players looks like now and after the merge. */
+export interface MergePreviewLine {
+  leagueId: string;
+  leagueName: string;
+  from: StatNumbers | null;
+  into: StatNumbers | null;
+  /** the row that remains; the two rows are added when both exist */
+  after: StatNumbers;
+  summed: boolean;
+}
+
+/**
+ * What a merge does to the league rows. `leagueIds` null = merge completely (all leagues of the source player),
+ * otherwise only those leagues. Mirrors merge_players in the database: rows of the same league are added,
+ * a row without counterpart moves unchanged.
+ */
+export function previewMerge(from: PlayerAdminRow, into: PlayerAdminRow, leagueIds: string[] | null): MergePreviewLine[] {
+  return from.leagueRows
+    .filter(r => leagueIds === null || leagueIds.includes(r.leagueId))
+    .map(r => {
+      const target = into.leagueRows.find(t => t.leagueId === r.leagueId) ?? null;
+      return {
+        leagueId: r.leagueId,
+        leagueName: r.leagueName,
+        from: r.stats,
+        into: target ? target.stats : null,
+        after: target ? addNumbers(r.stats, target.stats) : r.stats,
+        summed: !!target,
+      };
+    });
 }
 
 export function buildPlayerAdmin(input: PlayerAdminInput): PlayerAdminData {
@@ -68,7 +110,7 @@ export function buildPlayerAdmin(input: PlayerAdminInput): PlayerAdminData {
     evenings: evenings.get(p.id) ?? 0,
     leagueRows: input.leagueRows
       .filter(r => r.player_ref === p.id)
-      .map(r => ({ leagueId: r.league_id, leagueName: leagueName.get(r.league_id) ?? '?' }))
+      .map(r => ({ leagueId: r.league_id, leagueName: leagueName.get(r.league_id) ?? '?', stats: pickStats(r) }))
       .sort((a, b) => a.leagueName.localeCompare(b.leagueName, 'de')),
     matches: matches.get(p.id) ?? 0,
   }));
@@ -89,7 +131,7 @@ export type PlayerAdminAction = 'rename' | 'merge' | 'delete' | 'assign';
 
 /**
  * German message for a database error of one of the actions. The functions of the database raise readable German
- * messages themselves (for example "Beide Spieler stehen in der Liga ..."); they are passed on as they are.
+ * messages themselves (for example "Keine Liga gewählt."); they are passed on as they are.
  */
 export function describePlayerAdminError(action: PlayerAdminAction, error: { code?: string; message?: string } | null | undefined): string {
   const code = error?.code;

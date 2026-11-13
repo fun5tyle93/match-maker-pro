@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Merge, Pencil, Trash2, UserCog } from 'lucide-react';
+import { Check, Loader2, Merge, Pencil, Trash2, UserCog } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { PlayerNameField } from '@/components/PlayerNameField';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,15 +24,20 @@ import {
   describePlayerAdminError,
   isUnused,
   matchesSearch,
+  previewMerge,
   PlayerAdminAction,
   PlayerAdminData,
   PlayerAdminRow,
+  StatNumbers,
   UnassignedLeagueRow,
 } from '@/lib/playerAdmin';
 import { KnownPlayer } from '@/lib/playerPicker';
 import { assignLeagueRow, deletePlayer, loadPlayerAdmin, mergePlayers, renamePlayer } from '@/lib/storage';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+/** The numbers of a league row in one short line. */
+const statLine = (s: StatNumbers) =>
+  `${s.wins}-${s.draws}-${s.losses} S-U-N · Tore ${s.goals_for}:${s.goals_against} · ${s.points} Pkt · ${s.championships} M · ${s.vice_championships} V`;
 
 /** Administration of the list of known players (admin only): rename, merge, delete, give league rows a player. */
 const Players = () => {
@@ -47,6 +53,10 @@ const Players = () => {
   const [newName, setNewName] = useState('');
   const [merging, setMerging] = useState<PlayerAdminRow | null>(null);
   const [mergeInto, setMergeInto] = useState<KnownPlayer | null>(null);
+  // Merge everywhere (complete) or only in the chosen leagues
+  const [mergeScope, setMergeScope] = useState<'all' | 'some'>('all');
+  const [mergeLeagues, setMergeLeagues] = useState<string[]>([]);
+  const closeMerge = () => { setMerging(null); setMergeInto(null); setMergeScope('all'); setMergeLeagues([]); };
   const [deleting, setDeleting] = useState<PlayerAdminRow | null>(null);
   const [assigning, setAssigning] = useState<{ row: UnassignedLeagueRow; player: KnownPlayer } | null>(null);
 
@@ -115,10 +125,12 @@ const Players = () => {
   }
   if (!data) return frame(<p className="py-16 text-center text-muted-foreground">Lade Spielerliste…</p>);
 
-  // Both players in one league: refused by the database as well; shown here before the person confirms
-  const sharedLeague = merging && mergeInto
-    ? byId.get(mergeInto.ref)?.leagueRows.find(l => merging.leagueRows.some(m => m.leagueId === l.leagueId))
-    : undefined;
+  // What the merge would do, per league, before the person confirms
+  const mergeTarget = mergeInto ? byId.get(mergeInto.ref) : undefined;
+  const mergePreview = merging && mergeTarget ? previewMerge(merging, mergeTarget, mergeScope === 'all' ? null : mergeLeagues) : [];
+  const toggleMergeLeague = (leagueId: string) =>
+    setMergeLeagues(prev => (prev.includes(leagueId) ? prev.filter(id => id !== leagueId) : [...prev, leagueId]));
+  const mergeReady = !!mergeInto && (mergeScope === 'all' || mergeLeagues.length > 0);
 
   return frame(
     <div className="space-y-6">
@@ -184,7 +196,7 @@ const Players = () => {
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => { setRenaming(player); setNewName(player.displayName); }}>
                   <Pencil className="w-4 h-4 mr-1" />Umbenennen
                 </Button>
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => { setMerging(player); setMergeInto(null); }}>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => { closeMerge(); setMerging(player); }}>
                   <Merge className="w-4 h-4 mr-1" />Zusammenführen…
                 </Button>
                 {isUnused(player) && (
@@ -224,8 +236,8 @@ const Players = () => {
       </Dialog>
 
       {/* Merge */}
-      <Dialog open={!!merging} onOpenChange={open => { if (!open) { setMerging(null); setMergeInto(null); } }}>
-        <DialogContent>
+      <Dialog open={!!merging} onOpenChange={open => { if (!open) closeMerge(); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Spieler zusammenführen</DialogTitle>
             <DialogDescription>„{merging?.displayName}“ ist in Wirklichkeit:</DialogDescription>
@@ -240,30 +252,71 @@ const Players = () => {
             />
           ) : (
             <div className="space-y-3 text-sm">
-              <p>
-                Alle {plural(merging?.evenings ?? 0, 'Abend', 'Abende')} und {plural(merging?.leagueRows.length ?? 0, 'Liga-Zeile', 'Liga-Zeilen')} von
-                „{merging?.displayName}“ gehen auf <span className="font-medium">„{mergeInto.name}“</span> über.
-                „{merging?.displayName}“ wird als anderer Name von „{mergeInto.name}“ gespeichert.
-                Das lässt sich nicht automatisch rückgängig machen.
-              </p>
-              {sharedLeague && (
-                <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive">
-                  Beide stehen in der Liga „{sharedLeague.leagueName}“. Bitte dort zuerst eine der Zeilen bereinigen
-                  (Zahlen übertragen, eine Zeile löschen).
-                </p>
+              <p>Zusammenführen mit <span className="font-medium">„{mergeInto.name}“</span>. Wo soll das gelten?</p>
+              <div className="space-y-2" role="radiogroup" aria-label="Wo zusammenführen">
+                {([
+                  ['all', 'Überall – ganz zusammenführen', `Alle Ligen, ${plural(merging?.evenings ?? 0, 'Abend', 'Abende')} und Partien gehen auf „${mergeInto.name}“ über, „${merging?.displayName}“ wird als anderer Name gespeichert und aus der Liste entfernt.`],
+                  ['some', 'Nur in bestimmten Ligen', `Nur die gewählten Tabellen werden zusammengeführt. Beide Spieler bleiben bestehen, Abende und Namen ändern sich nicht.`],
+                ] as const).map(([value, label, detail]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={mergeScope === value}
+                    onClick={() => setMergeScope(value)}
+                    className={cn('w-full rounded-md border px-3 py-2 text-left transition-all', mergeScope === value ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50')}
+                  >
+                    <span className="font-medium">{label}</span>
+                    <span className="block text-xs text-muted-foreground">{detail}</span>
+                  </button>
+                ))}
+              </div>
+
+              {merging && merging.leagueRows.length === 0 ? (
+                <p className="text-xs text-muted-foreground">„{merging.displayName}“ steht in keiner Liga.</p>
+              ) : (
+                <div className="space-y-2" data-testid="merge-preview">
+                  {mergeScope === 'some' && <p className="text-xs text-muted-foreground">Ligen wählen:</p>}
+                  {(merging?.leagueRows ?? []).map(row => {
+                    const line = mergePreview.find(l => l.leagueId === row.leagueId);
+                    const chosen = mergeScope === 'all' || mergeLeagues.includes(row.leagueId);
+                    const target = mergeTarget?.leagueRows.find(t => t.leagueId === row.leagueId);
+                    return (
+                      <div key={row.leagueId} className={cn('rounded-md border p-2 space-y-1', chosen ? 'border-primary/40' : 'opacity-60')} data-testid={`merge-league-${row.leagueName}`}>
+                        {mergeScope === 'some' ? (
+                          <button type="button" role="checkbox" aria-checked={chosen} onClick={() => toggleMergeLeague(row.leagueId)} className="flex w-full items-center gap-2 text-left font-medium">
+                            <span className={cn('flex h-4 w-4 items-center justify-center rounded border', chosen ? 'border-primary bg-primary text-primary-foreground' : 'border-border')}>
+                              {chosen && <Check className="h-3 w-3" />}
+                            </span>
+                            {row.leagueName}
+                          </button>
+                        ) : (
+                          <p className="font-medium">{row.leagueName}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">„{merging?.displayName}“: {statLine(row.stats)}</p>
+                        <p className="text-xs text-muted-foreground">„{mergeInto.name}“: {target ? statLine(target.stats) : 'keine Zeile'}</p>
+                        {line && (
+                          <p className="text-xs font-medium">
+                            {line.summed ? 'Danach (addiert): ' : 'Danach (Zeile wird übernommen): '}{statLine(line.after)}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
+              <p className="text-xs text-muted-foreground">Das lässt sich nicht automatisch rückgängig machen. Die Zahlen bitte danach kurz prüfen.</p>
               <button type="button" className="text-xs underline text-muted-foreground" onClick={() => setMergeInto(null)}>Anderen Spieler wählen</button>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setMerging(null); setMergeInto(null); }}>Abbrechen</Button>
+            <Button variant="outline" onClick={closeMerge}>Abbrechen</Button>
             <Button
               variant="destructive"
-              disabled={busy || !mergeInto || !!sharedLeague}
+              disabled={busy || !mergeReady}
               onClick={async () => {
-                if (merging && mergeInto && await perform('merge', () => mergePlayers(merging.id, mergeInto.ref), `„${merging.displayName}“ ist jetzt „${mergeInto.name}“`)) {
-                  setMerging(null);
-                  setMergeInto(null);
+                if (merging && mergeInto && await perform('merge', () => mergePlayers(merging.id, mergeInto.ref, mergeScope === 'all' ? undefined : mergeLeagues), `„${merging.displayName}“ ist jetzt „${mergeInto.name}“${mergeScope === 'all' ? '' : ` (in ${plural(mergeLeagues.length, 'Liga', 'Ligen')})`}`)) {
+                  closeMerge();
                 }
               }}
             >

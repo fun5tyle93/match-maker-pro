@@ -347,7 +347,7 @@ describe('opening balances of the league check', () => {
 
 
 describe('player list administration', () => {
-  const stat = (id: string, league: string, name: string, ref: string | null, points = 1) => ({ id, league_id: league, player_id: `x-${id}`, player_name: name, player_ref: ref, points, championships: 0 });
+  const stat = (id: string, league: string, name: string, ref: string | null, points = 1) => ({ id, league_id: league, player_id: `x-${id}`, player_name: name, player_ref: ref, wins: 1, draws: 2, losses: 3, goals_for: 4, goals_against: 5, points, points_against: 6, goal_difference: 7, championships: 8, vice_championships: 9 });
   const seedAdmin = () => {
     seed(true);
     state.db.players = [{ id: 'R-erik', display_name: 'Erik Schwarz' }, { id: 'R-ben', display_name: 'Ben' }, { id: 'R-neu', display_name: 'Neu Angelegt' }];
@@ -361,7 +361,7 @@ describe('player list administration', () => {
     expect(data.players.map(p => p.displayName)).toEqual(['Ben', 'Erik Schwarz', 'Neu Angelegt']);
     const erik = data.players.find(p => p.id === 'R-erik')!;
     expect(erik).toMatchObject({ aliases: ['erik'], evenings: 1, matches: 1 });
-    expect(erik.leagueRows).toEqual([{ leagueId: 'L1', leagueName: 'Liga' }]);
+    expect(erik.leagueRows).toEqual([{ leagueId: 'L1', leagueName: 'Liga', stats: { wins: 1, draws: 2, losses: 3, goals_for: 4, goals_against: 5, points: 9, points_against: 6, goal_difference: 7, championships: 8, vice_championships: 9 } }]);
     expect(data.unassigned.map(r => `${r.playerName}:${r.points}`)).toEqual(['Doppelt:4', 'Doppelt:2']);
   });
 
@@ -370,9 +370,12 @@ describe('player list administration', () => {
     const storage = await freshStorage();
     await storage.renamePlayer('R-erik', 'Erik S.');
     await storage.mergePlayers('R-neu', 'R-ben');
+    await storage.mergePlayers('R-neu', 'R-ben', ['L1', 'L2']);
     expect(state.rpcCalls).toEqual([
       { name: 'rename_player', args: { p_player: 'R-erik', p_new_name: 'Erik S.' } },
-      { name: 'merge_players', args: { p_from: 'R-neu', p_into: 'R-ben' } },
+      // without a league choice: null = merge completely
+      { name: 'merge_players', args: { p_from: 'R-neu', p_into: 'R-ben', p_leagues: null } },
+      { name: 'merge_players', args: { p_from: 'R-neu', p_into: 'R-ben', p_leagues: ['L1', 'L2'] } },
     ]);
   });
 
@@ -381,8 +384,8 @@ describe('player list administration', () => {
     const storage = await freshStorage();
     state.failOn = (mode, name) => (mode === 'rpc' && name === 'rename_player' ? { code: '23505', message: 'duplicate key' } : false);
     await expect(storage.renamePlayer('R-erik', 'Ben')).rejects.toMatchObject({ code: '23505' });
-    state.failOn = (mode, name) => (mode === 'rpc' && name === 'merge_players' ? { code: 'P0001', message: 'Beide Spieler stehen in der Liga "Liga".' } : false);
-    await expect(storage.mergePlayers('R-erik', 'R-ben')).rejects.toMatchObject({ message: expect.stringContaining('Beide Spieler') });
+    state.failOn = (mode, name) => (mode === 'rpc' && name === 'merge_players' ? { code: 'P0001', message: 'Keine Liga gewählt.' } : false);
+    await expect(storage.mergePlayers('R-erik', 'R-ben')).rejects.toMatchObject({ message: expect.stringContaining('Keine Liga') });
   });
 
   it('deletes exactly one player and throws when the database refuses', async () => {

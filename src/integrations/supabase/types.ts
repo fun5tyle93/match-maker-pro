@@ -406,7 +406,7 @@ export type Database = {
     }
     Functions: {
       merge_players: {
-        Args: { p_from: string; p_into: string }
+        Args: { p_from: string; p_into: string; p_leagues?: string[] | null }
         Returns: undefined
       }
       rename_player: {

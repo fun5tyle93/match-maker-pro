@@ -170,7 +170,7 @@ export async function loadPlayerAdmin(): Promise<PlayerAdminData> {
     fetchAll(() => supabase.from('player_aliases').select('alias, player_id').order('alias', { ascending: true })),
     fetchAll(() => supabase.from('training_players').select('player_ref').order('id', { ascending: true })),
     fetchAll(() => supabase.from('matches').select('home_player_ref, away_player_ref').order('id', { ascending: true })),
-    fetchAll(() => supabase.from('player_stats').select('id, league_id, player_name, player_ref, points, championships').order('id', { ascending: true })),
+    fetchAll(() => supabase.from('player_stats').select('id, league_id, player_name, player_ref, wins, draws, losses, goals_for, goals_against, points, points_against, goal_difference, championships, vice_championships').order('id', { ascending: true })),
     fetchAll(() => supabase.from('leagues').select('id, name').order('id', { ascending: true })),
   ]);
   return buildPlayerAdmin({ players, aliases, trainingPlayers, matches, leagueRows, leagues });
@@ -182,9 +182,14 @@ export async function renamePlayer(playerId: string, newName: string): Promise<v
   if (error) throw error;
 }
 
-/** Merges player `fromId` into `intoId` (all references move, the name becomes another name). Throws on a database error. */
-export async function mergePlayers(fromId: string, intoId: string): Promise<void> {
-  const { error } = await supabase.rpc('merge_players', { p_from: fromId, p_into: intoId });
+/**
+ * Merges player `fromId` into `intoId`. Rows of the same league are added (all ten numbers), rows without counterpart move.
+ * Without `leagueIds` the merge is complete (evenings, matches and names move too and the source player is deleted);
+ * with `leagueIds` only the league rows and opening balances of these leagues move and both players remain.
+ * Throws on a database error.
+ */
+export async function mergePlayers(fromId: string, intoId: string, leagueIds?: string[]): Promise<void> {
+  const { error } = await supabase.rpc('merge_players', { p_from: fromId, p_into: intoId, p_leagues: leagueIds ?? null });
   if (error) throw error;
 }
 

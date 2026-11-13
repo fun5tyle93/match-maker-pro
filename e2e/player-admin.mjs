@@ -7,6 +7,11 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const BASE = process.argv[2]; const OUT = process.argv[3] || '.'; const REF = 'swuwjjmspplzfguapvty';
 const id = n => `a0000000-0000-4000-8000-0000000000${n}`;
 const P = { anna: id('01'), anni: id('02'), ben: id('03'), cem: id('04'), dora: id('05') };
+// A league row with all ten numbers; every column gets another value so a forgotten column is noticed
+const STAT_KEYS = ['wins', 'draws', 'losses', 'goals_for', 'goals_against', 'points', 'points_against', 'goal_difference', 'championships', 'vice_championships'];
+function st(id, league, name, ref, base, over = {}) {
+  return { id, league_id: league, player_id: 'x' + id, player_name: name, player_ref: ref, ...Object.fromEntries(STAT_KEYS.map((k, n) => [k, base + n])), ...over };
+}
 const tables = {
   players: [
     { id: P.anna, display_name: 'Anna Test' }, { id: P.anni, display_name: 'Anni Test' }, { id: P.ben, display_name: 'Ben Test' },
@@ -25,10 +30,13 @@ const tables = {
   ],
   leagues: [{ id: 'L1', name: 'Liga Eins' }, { id: 'L2', name: 'Liga Zwei' }],
   player_stats: [
-    { id: 's1', league_id: 'L1', player_id: 'x1', player_name: 'Anna Test', player_ref: P.anna, points: 10, championships: 1 },
-    { id: 's2', league_id: 'L1', player_id: 'x2', player_name: 'Ben Test', player_ref: P.ben, points: 8, championships: 0 },
-    { id: 's3', league_id: 'L1', player_id: 'x3', player_name: 'Dora Test', player_ref: P.dora, points: 3, championships: 0 },
-    { id: 's4', league_id: 'L2', player_id: 'x4', player_name: 'Ohne Spieler', player_ref: null, points: 4, championships: 2 },
+    st('s1', 'L1', 'Anna Test', P.anna, 10, { points: 10, championships: 1 }),
+    st('s2', 'L1', 'Ben Test', P.ben, 20, { points: 8, championships: 0 }),
+    st('s3', 'L1', 'Dora Test', P.dora, 30, { points: 3, championships: 0 }),
+    st('s4', 'L2', 'Ohne Spieler', null, 40, { points: 4, championships: 2 }),
+    st('s5', 'L1', 'Anni Test', P.anni, 50, { points: 5, championships: 3 }),
+    st('s6', 'L2', 'Anni Test', P.anni, 60, { points: 6, championships: 0 }),
+    st('s7', 'L2', 'Dora Test', P.dora, 70, { points: 7, championships: 1 }),
   ],
   training_sessions: [], current_session: [{ id: 1, session_id: null }],
 };
@@ -60,11 +68,18 @@ function rpc(name, a) {
     const from = T.players.find(p => p.id === a.p_from), into = T.players.find(p => p.id === a.p_into);
     if (a.p_from === a.p_into) return fail(400, 'P0001', 'Ein Spieler kann nicht mit sich selbst zusammengeführt werden.');
     if (!from || !into) return fail(400, 'P0001', 'Spieler nicht gefunden.');
-    const shared = T.player_stats.find(r => r.player_ref === from.id && T.player_stats.some(o => o.player_ref === into.id && o.league_id === r.league_id));
-    if (shared) return fail(400, 'P0001', `Beide Spieler stehen in der Liga "${T.leagues.find(l => l.id === shared.league_id).name}". Bitte dort zuerst eine der Zeilen bereinigen.`);
+    const leagues = a.p_leagues ?? null;
+    if (leagues && leagues.length === 0) return fail(400, 'P0001', 'Keine Liga gewählt.');
+    for (const l of leagues ?? []) if (!T.player_stats.some(r => r.player_ref === from.id && r.league_id === l)) return fail(400, 'P0001', 'Der Spieler hat in einer der gewählten Ligen keine Zeile.');
+    // rows of the same league are added (all ten numbers), others move
+    for (const r of T.player_stats.filter(x => x.player_ref === from.id && (!leagues || leagues.includes(x.league_id)))) {
+      const t = T.player_stats.find(x => x.player_ref === into.id && x.league_id === r.league_id);
+      if (t) { for (const k of STAT_KEYS) t[k] += r[k]; T.player_stats = T.player_stats.filter(x => x !== r); }
+      else { r.player_ref = into.id; r.player_name = into.display_name; }
+    }
+    if (leagues) return { status: 204 };
     T.training_players.forEach(r => { if (r.player_ref === from.id) r.player_ref = into.id; });
     T.matches.forEach(r => { if (r.home_player_ref === from.id) r.home_player_ref = into.id; if (r.away_player_ref === from.id) r.away_player_ref = into.id; });
-    T.player_stats.forEach(r => { if (r.player_ref === from.id) { r.player_ref = into.id; r.player_name = into.display_name; } });
     T.player_aliases.forEach(x => { if (x.player_id === from.id) x.player_id = into.id; });
     T.player_aliases = T.player_aliases.filter(x => x.alias !== norm(from.display_name));
     T.player_aliases.push({ alias: norm(from.display_name), player_id: into.id });
@@ -157,29 +172,43 @@ await row('Cem Neu').waitFor({ timeout: 5000 });
 check('Umbenennen: neuer Name (Leerzeichen bereinigt) und alter Name als anderer Name', tables.players.find(p => p.id === P.cem).display_name === 'Cem Neu' && tables.player_aliases.some(a => a.alias === 'cem unbenutzt' && a.player_id === P.cem));
 check('Umbenennen: die Liste zeigt den neuen Namen und den alten als „auch“', (await row('Cem Neu').innerText()).includes('auch: cem unbenutzt'));
 
-// Zusammenführen: Anni -> Anna
+// Zusammenführen: Anni -> Anna (ganz): Liga Eins wird addiert, Liga Zwei übernommen
+const totals = () => Object.fromEntries(STAT_KEYS.map(k => [k, tables.player_stats.reduce((n, r) => n + r[k], 0)]));
+const totalsBefore = totals();
 await row('Anni Test').getByRole('button', { name: /Zusammenführen/ }).click();
 const dialog = page.getByRole('dialog');
 await dialog.getByPlaceholder('Spieler suchen…').fill('Anna');
 await dialog.getByRole('option', { name: 'Anna Test' }).click();
-check('Zusammenführen: Zusammenfassung nennt Quelle und Ziel', (await dialog.innerText()).includes('„Anni Test“') && (await dialog.innerText()).includes('„Anna Test“') && (await dialog.innerText()).includes('nicht automatisch rückgängig'));
+const text = await dialog.innerText();
+check('Zusammenführen: Zusammenfassung nennt Quelle und Ziel und die Wahl „Überall“ ist vorgewählt', text.includes('„Anni Test“') && text.includes('„Anna Test“') && text.includes('nicht automatisch rückgängig') && await dialog.getByRole('radio', { name: /Überall/ }).getAttribute('aria-checked') === 'true');
+const l1 = dialog.getByTestId('merge-league-Liga Eins'), l2 = dialog.getByTestId('merge-league-Liga Zwei');
+check('Vorschau: Liga Eins addiert (Pkt 10 + 5 = 15, Meister 1 + 3 = 4)', (await l1.innerText()).includes('Danach (addiert)') && (await l1.innerText()).includes('15 Pkt') && (await l1.innerText()).includes('4 M'), await l1.innerText());
+check('Vorschau: Liga Zwei wird übernommen (Anna hat dort keine Zeile)', (await l2.innerText()).includes('keine Zeile') && (await l2.innerText()).includes('Danach (Zeile wird übernommen)'), await l2.innerText());
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${OUT}/player-admin-merge-${process.env.W || 900}.png` });
 await dialog.getByRole('button', { name: 'Zusammenführen' }).click();
 await row('Anni Test').waitFor({ state: 'detached', timeout: 5000 });
 check('Zusammenführen: Quelle ist weg, Abende und Partien zeigen auf das Ziel', !tables.players.some(p => p.id === P.anni) && tables.training_players.find(r => r.id === 't2').player_ref === P.anna && tables.matches.find(m => m.id === 'm2').home_player_ref === P.anna);
 check('Zusammenführen: Name der Quelle ist anderer Name des Ziels', tables.player_aliases.some(a => a.alias === 'anni test' && a.player_id === P.anna));
-check('Zusammenführen: Zählung des Ziels aktualisiert (2 Abende)', (await row('Anna Test').innerText()).includes('2 Abende'));
+check('Zusammenführen: Zählung des Ziels aktualisiert (2 Abende, 2 Liga-Zeilen)', (await row('Anna Test').innerText()).includes('2 Abende') && (await row('Anna Test').innerText()).includes('2 Liga-Zeilen'));
+const anna1 = tables.player_stats.find(r => r.player_ref === P.anna && r.league_id === 'L1');
+check('Zusammenführen: Liga Eins hat alle zehn Spalten addiert', STAT_KEYS.every((k, n) => anna1[k] === (k === 'points' ? 15 : k === 'championships' ? 4 : 10 + n + 50 + n)), JSON.stringify(anna1));
+check('Zusammenführen: die Summe jeder Spalte über alle Zeilen ist unverändert (nichts verloren)', JSON.stringify(totals()) === JSON.stringify(totalsBefore), JSON.stringify(totals()));
 
-// Zusammenführen verweigert: Dora und Ben stehen beide in „Liga Eins“
-const beforeMerge = JSON.stringify([tables.players, tables.player_stats, tables.training_players]);
+// Zusammenführen nur in einer Liga: Dora -> Ben, nur Liga Eins; Dora bleibt mit ihrer Zeile in Liga Zwei
+const totalsBefore2 = totals();
 await row('Dora Test').getByRole('button', { name: /Zusammenführen/ }).click();
 await dialog.getByPlaceholder('Spieler suchen…').fill('Ben');
 await dialog.getByRole('option', { name: 'Ben Test' }).click();
-await dialog.getByText(/Beide stehen in der Liga „Liga Eins“/).waitFor({ timeout: 5000 });
-check('gleiche Liga: Warnung mit Liganamen, Knopf „Zusammenführen“ gesperrt', await dialog.getByRole('button', { name: 'Zusammenführen' }).isDisabled());
-check('gleiche Liga: nichts verändert', JSON.stringify([tables.players, tables.player_stats, tables.training_players]) === beforeMerge);
-await dialog.getByRole('button', { name: 'Abbrechen' }).click();
+await dialog.getByRole('radio', { name: /Nur in bestimmten Ligen/ }).click();
+check('Teil-Zusammenführen: ohne gewählte Liga ist der Knopf gesperrt', await dialog.getByRole('button', { name: 'Zusammenführen' }).isDisabled());
+await dialog.getByRole('checkbox', { name: /Liga Eins/ }).click();
+check('Teil-Zusammenführen: nach Wahl einer Liga ist der Knopf frei', await dialog.getByRole('button', { name: 'Zusammenführen' }).isEnabled());
+await page.screenshot({ path: `${OUT}/player-admin-merge-partial-${process.env.W || 900}.png` });
+await dialog.getByRole('button', { name: 'Zusammenführen' }).click();
+await page.getByText(/ist jetzt „Ben Test“ \(in 1 Liga\)/).waitFor({ timeout: 5000 });
+check('Teil-Zusammenführen: Liga Eins zu Ben addiert, Dora bleibt mit Liga Zwei und ihren Abenden', tables.players.some(p => p.id === P.dora) && !tables.player_stats.some(r => r.player_ref === P.dora && r.league_id === 'L1') && tables.player_stats.some(r => r.player_ref === P.dora && r.league_id === 'L2') && tables.player_stats.find(r => r.player_ref === P.ben && r.league_id === 'L1').points === 11);
+check('Teil-Zusammenführen: Summe jeder Spalte unverändert', JSON.stringify(totals()) === JSON.stringify(totalsBefore2));
 
 // Löschen
 await row('Cem Neu').getByLabel('Cem Neu löschen').click();

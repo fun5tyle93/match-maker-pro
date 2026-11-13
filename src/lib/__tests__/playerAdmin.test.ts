@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlayerAdmin, describePlayerAdminError, isUnused, matchesSearch, PlayerAdminInput } from '@/lib/playerAdmin';
+import { buildPlayerAdmin, describePlayerAdminError, isUnused, matchesSearch, previewMerge, PlayerAdminInput, STAT_KEYS, StatNumbers } from '@/lib/playerAdmin';
+
+// all ten numbers; a base value makes every column different, so a forgotten or swapped column shows up
+const nums = (base: number, over: Partial<StatNumbers> = {}): StatNumbers =>
+  ({ ...Object.fromEntries(STAT_KEYS.map((k, i) => [k, base + i])), ...over }) as StatNumbers;
 
 const input = (over: Partial<PlayerAdminInput> = {}): PlayerAdminInput => ({
   players: [
@@ -15,10 +19,10 @@ const input = (over: Partial<PlayerAdminInput> = {}): PlayerAdminInput => ({
     { home_player_ref: 'p-anna', away_player_ref: null },
   ],
   leagueRows: [
-    { id: 'r1', league_id: 'L2', player_name: 'Anna Müller', player_ref: 'p-anna', points: 5, championships: 1 },
-    { id: 'r2', league_id: 'L1', player_name: 'Anna Müller', player_ref: 'p-anna', points: 9, championships: 0 },
-    { id: 'r3', league_id: 'L1', player_name: 'Ohne Spieler', player_ref: null, points: 4, championships: 2 },
-    { id: 'r4', league_id: 'L2', player_name: 'Ohne Spieler B', player_ref: null, points: 1, championships: 0 },
+    { id: 'r1', league_id: 'L2', player_name: 'Anna Müller', player_ref: 'p-anna', ...nums(0, { points: 5, championships: 1 }) },
+    { id: 'r2', league_id: 'L1', player_name: 'Anna Müller', player_ref: 'p-anna', ...nums(0, { points: 9, championships: 0 }) },
+    { id: 'r3', league_id: 'L1', player_name: 'Ohne Spieler', player_ref: null, ...nums(0, { points: 4, championships: 2 }) },
+    { id: 'r4', league_id: 'L2', player_name: 'Ohne Spieler B', player_ref: null, ...nums(0, { points: 1, championships: 0 }) },
   ],
   leagues: [{ id: 'L1', name: 'Liga Zwei' }, { id: 'L2', name: 'Liga Eins' }],
   ...over,
@@ -30,7 +34,10 @@ describe('buildPlayerAdmin', () => {
     const data = buildPlayerAdmin(input());
     expect(by(data, 'Anna Müller')).toMatchObject({ evenings: 2, matches: 3 });
     expect(by(data, 'Ben Test')).toMatchObject({ evenings: 1, matches: 2, leagueRows: [] });
-    expect(by(data, 'Anna Müller').leagueRows).toEqual([{ leagueId: 'L2', leagueName: 'Liga Eins' }, { leagueId: 'L1', leagueName: 'Liga Zwei' }]);
+    expect(by(data, 'Anna Müller').leagueRows).toEqual([
+      { leagueId: 'L2', leagueName: 'Liga Eins', stats: nums(0, { points: 5, championships: 1 }) },
+      { leagueId: 'L1', leagueName: 'Liga Zwei', stats: nums(0, { points: 9, championships: 0 }) },
+    ]);
   });
 
   it('lists the other names of a player, sorted', () => {
@@ -74,7 +81,7 @@ describe('isUnused', () => {
     expect(isUnused(by(data, 'Ben Test'))).toBe(false); // evenings and matches, but no league row
     expect(isUnused({ ...by(data, 'Zora Test'), evenings: 1 })).toBe(false);
     expect(isUnused({ ...by(data, 'Zora Test'), matches: 1 })).toBe(false);
-    expect(isUnused({ ...by(data, 'Zora Test'), leagueRows: [{ leagueId: 'L1', leagueName: 'x' }] })).toBe(false);
+    expect(isUnused({ ...by(data, 'Zora Test'), leagueRows: [{ leagueId: 'L1', leagueName: 'x', stats: nums(0) }] })).toBe(false);
   });
 });
 
@@ -118,5 +125,37 @@ describe('describePlayerAdminError', () => {
 
   it('does not pass on a technical message of another kind', () => {
     expect(describePlayerAdminError('merge', { code: '08006', message: 'connection failure at host x' })).not.toMatch(/host x/);
+  });
+});
+
+describe('previewMerge', () => {
+  const row = (leagueId: string, base: number) => ({ leagueId, leagueName: `Liga ${leagueId}`, stats: nums(base) });
+  const player = (id: string, rows: ReturnType<typeof row>[]) =>
+    ({ id, displayName: id, aliases: [], evenings: 0, matches: 0, leagueRows: rows });
+
+  it('adds rows of the same league over all ten numbers and keeps a row without counterpart unchanged', () => {
+    const from = player('from', [row('L1', 10), row('L2', 100)]);
+    const into = player('into', [row('L1', 1)]);
+    const lines = previewMerge(from, into, null);
+    expect(lines.map(l => l.leagueId)).toEqual(['L1', 'L2']);
+    expect(lines[0].summed).toBe(true);
+    for (const [i, key] of STAT_KEYS.entries()) expect(lines[0].after[key]).toBe(10 + i + 1 + i);
+    expect(lines[1].summed).toBe(false);
+    expect(lines[1].after).toEqual(nums(100));
+    expect(lines[1].into).toBeNull();
+  });
+
+  it('shows only the chosen leagues, and nothing for an empty choice', () => {
+    const from = player('from', [row('L1', 10), row('L2', 100)]);
+    const into = player('into', []);
+    expect(previewMerge(from, into, ['L2']).map(l => l.leagueId)).toEqual(['L2']);
+    expect(previewMerge(from, into, [])).toEqual([]);
+  });
+
+  it('does not change the numbers of the input', () => {
+    const from = player('from', [row('L1', 10)]);
+    const into = player('into', [row('L1', 1)]);
+    previewMerge(from, into, null);
+    expect(into.leagueRows[0].stats).toEqual(nums(1));
   });
 });
