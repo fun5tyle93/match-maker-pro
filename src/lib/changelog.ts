@@ -23,6 +23,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '3.5.1', date: '2026-11-13', kind: 'patch', prs: [],
+    title: 'Zusammenführen: Hinweise ergänzt',
+    changes: [
+      'Nach dem Zusammenführen und Zuordnen weist die App auf die Ligenprüfung „berechnet = gespeichert“ hin.',
+      'Beim Zusammenführen nur in bestimmten Ligen warnt der Dialog: künftige Abende des alten Spielers legen dort wieder eine eigene Zeile an.',
+    ],
+  },
+  {
     version: '3.5.0', date: '2026-11-13', kind: 'minor', prs: [41],
     title: 'Dokumentation und Changelog',
     changes: [
