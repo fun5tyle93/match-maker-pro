@@ -260,6 +260,29 @@ export async function saveOpeningBalances(leagueId: string, entries: { ref: stri
 
 // ─── Leagues ───
 
+/** Rows of the given leagues, grouped by league (all rows, paged). */
+async function loadStatsByLeague(leagueIds: string[]): Promise<Map<string, any[]>> {
+  const statsRows = await fetchAll(() =>
+    supabase
+      .from('player_stats')
+      .select('*')
+      .in('league_id', leagueIds)
+      .order('id', { ascending: true })
+  );
+  const statsByLeague = new Map<string, any[]>();
+  for (const s of statsRows) {
+    statsByLeague.set(s.league_id, [...(statsByLeague.get(s.league_id) ?? []), s]);
+  }
+  return statsByLeague;
+}
+
+// Annual league: points, fewer points lost, goal difference, goals scored (SO § 2 Abs. 6);
+// eternal table: points, championships. The sort is stable, so rows that are level keep their order.
+const buildLeague = (row: any, stats: any[]): League => {
+  const league = toLeague(row, stats);
+  return { ...league, playerStats: sortRows(league.playerStats, !!league.isEternal) };
+};
+
 export async function loadLeagues(): Promise<League[]> {
   try {
     const { data: leagueRows, error } = await supabase
@@ -269,57 +292,52 @@ export async function loadLeagues(): Promise<League[]> {
     if (error) throw error;
     if (!leagueRows || leagueRows.length === 0) return [];
 
-    const leagueIds = leagueRows.map(r => r.id);
-    const statsRows = await fetchAll(() =>
-      supabase
-        .from('player_stats')
-        .select('*')
-        .in('league_id', leagueIds)
-        .order('id', { ascending: true })
-    );
-
-    const statsByLeague = new Map<string, any[]>();
-    for (const s of statsRows) {
-      statsByLeague.set(s.league_id, [...(statsByLeague.get(s.league_id) ?? []), s]);
-    }
-    return leagueRows.map(row => {
-      const league = toLeague(row, statsByLeague.get(row.id) ?? []);
-      // Annual league: points, fewer points lost, goal difference, goals scored (SO § 2 Abs. 6);
-      // eternal table: points, championships. The sort is stable, so rows that are level keep their order.
-      return { ...league, playerStats: sortRows(league.playerStats, !!league.isEternal) };
-    });
+    const statsByLeague = await loadStatsByLeague(leagueRows.map(r => r.id));
+    return leagueRows.map(row => buildLeague(row, statsByLeague.get(row.id) ?? []));
   } catch (err) {
     console.error('Failed to load leagues:', err);
     throw err;
   }
 }
 
-/**
- * Saves one league and its player stats. Rows are only added or changed first;
- * stats of players that are no longer in the league are removed afterwards, so a
- * failure never leaves a league without its data. Throws on any database error.
- */
-export async function saveLeague(league: League): Promise<void> {
-  const { error: leagueError } = await supabase.from('leagues').upsert({
+/** One league with its rows, fresh from the database (same mapping and sorting as loadLeagues). Null if it does not exist. */
+export async function loadLeague(leagueId: string): Promise<League | null> {
+  const { data, error } = await supabase.from('leagues').select('*').eq('id', leagueId).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const statsByLeague = await loadStatsByLeague([leagueId]);
+  return buildLeague(data, statsByLeague.get(leagueId) ?? []);
+}
+
+/** Writes the league itself (name, year, eternal flag), never its rows. Throws on a database error. */
+export async function saveLeagueHeader(league: League): Promise<void> {
+  const { error } = await supabase.from('leagues').upsert({
     id: league.id,
     name: league.name,
     year: league.year,
     created_at: league.createdAt,
     is_eternal: league.isEternal ?? false,
   });
-  if (leagueError) throw leagueError;
+  if (error) throw error;
+}
 
-  // A player is identified by player_id within a league; keep the row id of existing rows
-  const existing = await fetchAll(() =>
-    supabase
-      .from('player_stats')
-      .select('id, player_id')
-      .eq('league_id', league.id)
-      .order('id', { ascending: true })
-  );
+/**
+ * Writes the given rows of a league (insert or update) and nothing else: other rows of the league stay as they are
+ * and nothing is ever deleted. A row is identified by player_id within the league; the row id of an existing row is
+ * kept. Throws on a database error.
+ */
+export async function saveLeagueRows(league: League, rows: PlayerStats[]): Promise<void> {
+  if (rows.length === 0) return;
+  const existing: any[] = [];
+  for (const part of chunk(rows.map(r => r.player.id))) {
+    const found = await fetchAll(() =>
+      supabase.from('player_stats').select('id, player_id').eq('league_id', league.id).in('player_id', part).order('id', { ascending: true })
+    );
+    existing.push(...found);
+  }
   const rowIdByPlayer = new Map<string, string>(existing.map(r => [r.player_id, r.id]));
 
-  const rows = league.playerStats.map(s => ({
+  await upsertRows('player_stats', rows.map(s => ({
     id: rowIdByPlayer.get(s.player.id) ?? crypto.randomUUID(),
     league_id: league.id,
     player_id: s.player.id,
@@ -335,11 +353,13 @@ export async function saveLeague(league: League): Promise<void> {
     championships: s.championships ?? 0,
     vice_championships: s.viceChampionships ?? 0,
     ...(schemaFeatures.playerRef && s.player.ref ? { player_ref: s.player.ref } : {}),
-  }));
-  await upsertRows('player_stats', rows);
+  })));
+}
 
-  const wanted = new Set(league.playerStats.map(s => s.player.id));
-  await deleteByIds('player_stats', existing.filter(r => !wanted.has(r.player_id)).map(r => r.id));
+/** Deletes exactly one row of one league (the admin removed the player there). Throws on a database error. */
+export async function deleteLeagueRow(leagueId: string, playerId: string): Promise<void> {
+  const { error } = await supabase.from('player_stats').delete().eq('league_id', leagueId).eq('player_id', playerId);
+  if (error) throw error;
 }
 
 /** Deletes one league (its player stats are removed by the database). */

@@ -37,11 +37,11 @@ import { SaveStatusBadge } from '@/components/SaveStatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlayerRegistry } from '@/hooks/usePlayerRegistry';
 import {
-  loadLeagues, saveLeague, swissStateSupported, loadRunningSwissSession, saveSwissSession, discardSwissSession,
+  loadLeagues, loadLeague, saveLeagueHeader, saveLeagueRows, swissStateSupported, loadRunningSwissSession, saveSwissSession, discardSwissSession,
 } from '@/lib/storage';
 import { useSwissAutosave, findRestorableSwissBackup, clearSwissBackup, announceRestored } from '@/hooks/useSwissAutosave';
 import { maxSwissRounds, PairingBudgetError, SwissPairingError } from '@/lib/swissPairingEngine';
-import { applySessionToLeague, NameMatchesByLeague } from '@/lib/leagueTransfer';
+import { applySessionToLeague, changedRows, NameMatchesByLeague } from '@/lib/leagueTransfer';
 import { sameName } from '@/lib/nameMatching';
 import { cn } from '@/lib/utils';
 import { pluralize } from '@/lib/plural';
@@ -384,20 +384,23 @@ export default function SchweizSystem() {
     const targetIds = leagueIds.filter(id => !alreadyDone.includes(id));
 
     // The same booking as for a training evening (shared function): the eternal table only gets points and championships
-    const updatedLeagues = leagues.map(league =>
-      targetIds.includes(league.id) ? applySessionToLeague(league, stats, firstPlace, secondPlace, nameMatches.get(league.id) ?? new Map()) : league,
-    );
-
-    // Save league by league and remember each one, so a repeated transfer never counts twice
+    // League by league: read the league fresh from the database, book the evening on it and write only the rows that
+    // changed. The browser state is not used for the numbers, so a second device cannot be overwritten or lose rows.
+    // After each league the evening is marked as transferred to it, so a failure never counts it twice.
     let currentLeagues = leagues;
     let currentSession = session;
-    for (const league of updatedLeagues.filter(l => targetIds.includes(l.id))) {
+    for (const leagueId of targetIds) {
+      const leagueName = leagues.find(l => l.id === leagueId)?.name ?? '';
+      let league: League;
       try {
-        await saveLeague(league);
+        const fresh = await loadLeague(leagueId);
+        if (!fresh) throw new Error('league not found');
+        league = applySessionToLeague(fresh, stats, firstPlace, secondPlace, nameMatches.get(leagueId) ?? new Map());
+        await saveLeagueRows(league, changedRows(fresh, league));
       } catch (err) {
         console.error('Failed to save league:', err);
         toast.error(
-          `Übertragung zu "${league.name}" fehlgeschlagen. Bitte erneut versuchen – bereits übertragene Ligen werden nicht doppelt gezählt.`
+          `Übertragung zu "${leagueName}" fehlgeschlagen. Bitte erneut versuchen – bereits übertragene Ligen werden nicht doppelt gezählt.`
         );
         return;
       }
@@ -434,7 +437,7 @@ export default function SchweizSystem() {
       playerStats: [], createdAt: new Date().toISOString(),
     };
     try {
-      await saveLeague(newLeague);
+      await saveLeagueHeader(newLeague);
     } catch (err) {
       console.error('Failed to create league:', err);
       toast.error('Die Liga konnte nicht gespeichert werden. Bitte erneut versuchen.');

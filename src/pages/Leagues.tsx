@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { League, PlayerStats, Player } from '@/types';
-import { loadLeagues, saveLeague, deleteLeague } from '@/lib/storage';
+import { loadLeagues, loadLeague, saveLeagueHeader, saveLeagueRows, deleteLeagueRow, deleteLeague } from '@/lib/storage';
 import { compareLeagueRows, placesFor } from '@/lib/ranking';
 import { findNameCandidates, sameName } from '@/lib/nameMatching';
 import { useAuth } from '@/contexts/AuthContext';
@@ -83,16 +83,23 @@ const Leagues = () => {
     init();
   }, []);
 
-  // Saves first; the screen is only changed when the server confirmed it
-  const persistLeague = async (league: League): Promise<boolean> => {
+  // Writes first, then reads the league fresh from the database; the screen is only changed with that result.
+  // So changes of another device become visible, and only the rows that were written have changed.
+  const persist = async (leagueId: string, write: () => Promise<void>): Promise<League | null> => {
     try {
-      await saveLeague(league);
-      return true;
+      await write();
+      const fresh = await loadLeague(leagueId);
+      if (!fresh) throw new Error('league not found');
+      return fresh;
     } catch (err) {
       console.error('Failed to save league:', err);
       toast.error('Speichern fehlgeschlagen. Es wurde nichts verändert – bitte erneut versuchen.');
-      return false;
+      return null;
     }
+  };
+  const showLeague = (league: League) => {
+    setLeagues(prev => prev.map(l => (l.id === league.id ? league : l)));
+    setSelectedLeague(league);
   };
 
   const handleCreateLeague = async () => {
@@ -106,7 +113,13 @@ const Leagues = () => {
       createdAt: new Date().toISOString(),
     };
 
-    if (!(await persistLeague(newLeague))) return;
+    try {
+      await saveLeagueHeader(newLeague);
+    } catch (err) {
+      console.error('Failed to save league:', err);
+      toast.error('Speichern fehlgeschlagen. Es wurde nichts verändert – bitte erneut versuchen.');
+      return;
+    }
     setLeagues([...leagues, newLeague]);
     setSelectedLeague(newLeague);
     setNewLeagueName('');
@@ -187,11 +200,11 @@ const Leagues = () => {
     updatedStats.sort(compareLeagueRows);
 
     const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
-    const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
-    
-    if (!(await persistLeague(updatedLeague))) return;
-    setLeagues(updatedLeagues);
-    setSelectedLeague(updatedLeague);
+    const editedRow = updatedStats.find(s => s.player.id === editingPlayer.player.id)!;
+
+    const fresh = await persist(selectedLeague.id, () => saveLeagueRows(updatedLeague, [editedRow]));
+    if (!fresh) return;
+    showLeague(fresh);
     setShowEditDialog(false);
     toast.success('Spieler aktualisiert');
   };
@@ -199,13 +212,9 @@ const Leagues = () => {
   const handleDeletePlayer = async (playerId: string) => {
     if (!selectedLeague) return;
 
-    const updatedStats = selectedLeague.playerStats.filter(s => s.player.id !== playerId);
-    const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
-    const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
-    
-    if (!(await persistLeague(updatedLeague))) return;
-    setLeagues(updatedLeagues);
-    setSelectedLeague(updatedLeague);
+    const fresh = await persist(selectedLeague.id, () => deleteLeagueRow(selectedLeague.id, playerId));
+    if (!fresh) return;
+    showLeague(fresh);
     toast.success('Spieler entfernt');
   };
 
@@ -252,13 +261,9 @@ const Leagues = () => {
       viceChampionships: 0,
     };
 
-    const updatedStats = [...selectedLeague.playerStats, newStat];
-    const updatedLeague = { ...selectedLeague, playerStats: updatedStats };
-    const updatedLeagues = leagues.map(l => l.id === selectedLeague.id ? updatedLeague : l);
-    
-    if (!(await persistLeague(updatedLeague))) return;
-    setLeagues(updatedLeagues);
-    setSelectedLeague(updatedLeague);
+    const fresh = await persist(selectedLeague.id, () => saveLeagueRows(selectedLeague, [newStat]));
+    if (!fresh) return;
+    showLeague(fresh);
     setShowAddPlayer(false);
     toast.success(`Spieler "${newPlayer.name}" hinzugefügt`);
   };
