@@ -50,7 +50,7 @@ const page = await ctx.newPage(); watch(page);
 ctx.on('page', watch);
 const resp = await page.goto(BASE + '/');
 console.log('CSP-Header kommt an:', !!(await resp.headerValue('content-security-policy')));
-for (const path of ['/', '/training', '/leagues', '/statistiken', '/history', '/dokumentation', '/schweizer-system', '/admin', '/gibt-es-nicht']) {
+for (const path of ['/', '/training', '/leagues', '/spieler', '/statistiken', '/history', '/dokumentation', '/schweizer-system', '/admin', '/gibt-es-nicht']) {
   await page.goto(BASE + path); await page.waitForTimeout(700);
   const v = await page.evaluate(() => window.__csp); if (v.length) problems.push(`${path}: ${v.join(' | ')}`);
   console.log('Seite ok:', path, (await page.locator('body').innerText()).length, 'Zeichen');

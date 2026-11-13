@@ -19,6 +19,8 @@ export interface Difference {
 
 export interface MissingRow {
   name: string;
+  /** fixed identity of the player, if the evening players have one */
+  ref?: string;
   /** what the evenings add up to for a player who has no row in the league */
   contribution: Numbers;
 }
@@ -70,7 +72,11 @@ export function checkLeague(league: League, sessions: TrainingSession[], opening
 
   for (const row of rows) {
     if (!row.stored) {
-      missingRows.push({ name: row.player.name, contribution: row.contribution });
+      // After a merge of league rows only ("Spielerliste"), the evenings still carry the old identity. When the opening
+      // balance of that identity cancels the contribution exactly, this was acknowledged ("Als neuen Stand übernehmen").
+      const opening = row.player.ref ? openings.get(row.player.ref) : undefined;
+      if (opening && COLUMNS.every(c => opening[c] + row.contribution[c] === 0)) continue;
+      missingRows.push({ name: row.player.name, ref: row.player.ref, contribution: row.contribution });
       continue;
     }
     if (!row.stored.player.ref) {
@@ -95,5 +101,15 @@ export function checkLeague(league: League, sessions: TrainingSession[], opening
 export function openingsFor(league: League, sessions: TrainingSession[]): { ref: string; opening: Numbers }[] {
   const counted = sessions.filter(s => s.tournamentType !== 'swiss');
   const { rows } = openingBalances(league.playerStats, bookSessions(!!league.isEternal, counted));
-  return rows.filter(r => r.stored?.player.ref).map(r => ({ ref: r.stored!.player.ref as string, opening: r.opening }));
+  const result = rows.filter(r => r.stored?.player.ref).map(r => ({ ref: r.stored!.player.ref as string, opening: r.opening }));
+  // Evenings that booked a player who has no row (any more): the opening balance cancels the contribution, so the
+  // check stays quiet about it. Only for players with a fixed identity and only once per identity.
+  const known = new Set(result.map(r => r.ref));
+  for (const r of rows) {
+    const ref = r.stored ? undefined : r.player.ref;
+    if (!ref || known.has(ref)) continue;
+    known.add(ref);
+    result.push({ ref, opening: Object.fromEntries(COLUMNS.map(c => [c, -r.contribution[c]])) as Numbers });
+  }
+  return result;
 }

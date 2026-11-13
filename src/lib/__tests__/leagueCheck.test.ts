@@ -110,3 +110,41 @@ describe('openingsFor', () => {
     expect(result).toMatchObject({ ok: true, differences: [], notChecked: ['Ohne Identität'] });
   });
 });
+
+describe('rows that moved to another player by a merge of league rows only', () => {
+  // Cem's row was merged into Anna's league row, but the evenings still book Cem
+  const merged = () => {
+    const { league, openings } = consistent({});
+    const cem = league.playerStats.find(s => s.player.name === 'Cem')!;
+    const anna = league.playerStats.find(s => s.player.name === 'Anna')!;
+    for (const c of Object.keys(zero) as (keyof typeof zero)[]) anna[c] = (anna[c] ?? 0) + (cem[c] ?? 0);
+    league.playerStats = league.playerStats.filter(s => s !== cem);
+    return { league, openings };
+  };
+
+  it('is reported as missing row and difference until it is taken over as the new state', () => {
+    const { league, openings } = merged();
+    const result = checkLeague(league, sessions, openings);
+    expect(result.ok).toBe(false);
+    expect(result.missingRows.map(m => m.name)).toEqual(['Cem']);
+    expect(result.differences.length).toBeGreaterThan(0);
+  });
+
+  it('is quiet after taking over: Cem is acknowledged, Anna carries the sum, and a second take-over changes nothing', () => {
+    const { league, openings } = merged();
+    const taken = openingsFor(league, sessions);
+    const lookup: OpeningLookup = new Map(taken.map(t => [t.ref, t.opening]));
+    expect(checkLeague(league, sessions, lookup)).toMatchObject({ ok: true, differences: [], missingRows: [] });
+    expect(openingsFor(league, sessions)).toEqual(taken);
+    // a real change after that is still noticed
+    league.playerStats.find(s => s.player.name === 'Anna')!.points += 1;
+    expect(checkLeague(league, sessions, lookup).differences).toEqual([expect.objectContaining({ name: 'Anna', column: 'points' })]);
+    void openings;
+  });
+
+  it('does not hide a missing row whose opening balance does not cancel the evenings', () => {
+    const { league } = merged();
+    const wrong: OpeningLookup = new Map([['R-c', { ...zero, points: -1 }]]);
+    expect(checkLeague(league, sessions, wrong).missingRows.map(m => m.name)).toEqual(['Cem']);
+  });
+});

@@ -405,7 +405,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      merge_players: {
+        Args: { p_from: string; p_into: string; p_leagues?: string[] | null }
+        Returns: undefined
+      }
+      rename_player: {
+        Args: { p_player: string; p_new_name: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -16,7 +16,7 @@ export interface PickedPlayer {
 interface PlayerNameFieldProps {
   /** Known players. Without it (null) the field takes any text, as before the player list existed. */
   registry: PlayerRegistry | null;
-  /** Adds a new person to the player list; resolves to the stored player */
+  /** Adds a new person to the player list; resolves to the stored player. Without it only known players can be chosen. */
   onCreate?: (name: string) => Promise<KnownPlayer>;
   /** A player was chosen (or typed, without a list) */
   onPick: (player: PickedPlayer) => void;
@@ -124,10 +124,12 @@ export function PlayerNameField({ registry, onCreate, onPick, isTaken, placehold
             </div>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" onClick={create} disabled={saving || !onCreate}>
-              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
-              Neuen Spieler anlegen
-            </Button>
+            {onCreate && (
+              <Button type="button" size="sm" onClick={create} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
+                Neuen Spieler anlegen
+              </Button>
+            )}
             <Button type="button" size="sm" variant="outline" onClick={() => setPendingName(null)} disabled={saving}>
               <X className="w-4 h-4 mr-1" />
               Abbrechen

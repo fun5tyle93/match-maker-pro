@@ -1,5 +1,5 @@
 import { NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
-import { Trophy, Calendar, Home, History, LogOut, LogIn, BookOpen, GitBranch, BarChart3 } from 'lucide-react';
+import { Trophy, Calendar, Home, History, LogOut, LogIn, BookOpen, GitBranch, BarChart3, UserCog } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TippKickBall } from './TippKickBall';
 import tkc71Logo from '@/assets/tkc71-logo.jpeg';
@@ -12,7 +12,7 @@ export function Header() {
   const navigate = useNavigate();
   // Seven menu items plus the login need about 1220 px with labels and title: the labels start at lg
   // (1024 px), the title at xl (1280 px); below that only icons are shown, with tighter spacing on phones.
-  const linkClass = "flex items-center gap-2 px-2 max-[359px]:px-1.5 lg:px-3 py-2 rounded-lg font-medium transition-all duration-200 text-sm";
+  const linkClass = "flex items-center gap-2 px-2 max-[374px]:px-1 lg:px-3 py-2 rounded-lg font-medium transition-all duration-200 text-sm";
   const activeClass = "bg-primary/20 text-primary";
   const inactiveClass = "text-muted-foreground hover:text-foreground hover:bg-secondary";
 
@@ -69,6 +69,17 @@ export function Header() {
               <Trophy className="w-4 h-4" />
               <span className="hidden lg:inline">Ligen</span>
             </RouterNavLink>
+            {isAdmin && (
+              <RouterNavLink
+                to="/spieler"
+                className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
+                title="Spielerliste"
+              >
+                <UserCog className="w-4 h-4" />
+                {/* the label only from xl: with the eighth item the row would be too wide at 1024 px */}
+                <span className="hidden xl:inline">Spieler</span>
+              </RouterNavLink>
+            )}
             <RouterNavLink
               to="/statistiken"
               className={({ isActive }) => cn(linkClass, isActive ? activeClass : inactiveClass)}
@@ -96,7 +107,7 @@ export function Header() {
                 variant="ghost"
                 size="sm"
                 onClick={handleSignOut}
-                className="gap-2 px-2 max-[359px]:px-1.5 lg:px-3 text-muted-foreground hover:text-foreground ml-0.5 lg:ml-1"
+                className="gap-2 px-2 max-[374px]:px-1 lg:px-3 text-muted-foreground hover:text-foreground ml-0.5 lg:ml-1"
                 title="Abmelden"
               >
                 <LogOut className="w-4 h-4" />
@@ -107,7 +118,7 @@ export function Header() {
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate('/admin')}
-                className="gap-2 px-2 max-[359px]:px-1.5 lg:px-3 text-muted-foreground hover:text-foreground ml-0.5 lg:ml-1"
+                className="gap-2 px-2 max-[374px]:px-1 lg:px-3 text-muted-foreground hover:text-foreground ml-0.5 lg:ml-1"
                 title="Admin-Login"
               >
                 <LogIn className="w-4 h-4" />
