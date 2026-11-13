@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applySessionToLeague } from '@/lib/leagueTransfer';
+import { applySessionToLeague, changedRows } from '@/lib/leagueTransfer';
 import { League, PlayerStats } from '@/types';
 
 const stat = (name: string, v: Partial<PlayerStats> = {}): PlayerStats => ({
@@ -177,5 +177,41 @@ describe('eternal table', () => {
     const a = applySessionToLeague(eternal, evening, 'Bernd', 'Anna', none);
     const b = applySessionToLeague(eternal, evening, 'Bernd', 'Anna', none);
     expect(a).toEqual(b);
+  });
+});
+
+describe('changedRows', () => {
+  const before = () => league([stat('Anna', { points: 4 }), stat('Ben', { points: 2 })]);
+
+  it('is empty for an unchanged league', () => {
+    expect(changedRows(before(), before())).toEqual([]);
+  });
+
+  it('returns exactly the row whose number changed, whichever of the ten columns it is', () => {
+    for (const field of ['wins', 'draws', 'losses', 'goalsFor', 'goalsAgainst', 'points', 'pointsAgainst', 'goalDifference', 'championships', 'viceChampionships'] as const) {
+      const after = before();
+      after.playerStats[1] = { ...after.playerStats[1], [field]: 5 };
+      expect(changedRows(before(), after).map(r => r.player.name)).toEqual(['Ben']);
+    }
+  });
+
+  it('contains new rows, renamed rows and rows that got an identity', () => {
+    const after = before();
+    after.playerStats.push(stat('Cem'));
+    after.playerStats[0] = { ...after.playerStats[0], player: { ...after.playerStats[0].player, name: 'Anna S.' } };
+    after.playerStats[1] = { ...after.playerStats[1], player: { ...after.playerStats[1].player, ref: 'R-ben' } };
+    expect(changedRows(before(), after).map(r => r.player.name).sort()).toEqual(['Anna S.', 'Ben', 'Cem']);
+  });
+
+  it('does not report a row that was only moved in the order, and has no row for a removed player', () => {
+    const after = league([...before().playerStats].reverse());
+    expect(changedRows(before(), after)).toEqual([]);
+    expect(changedRows(before(), league([before().playerStats[0]]))).toEqual([]);
+  });
+
+  it('after booking an evening, only the players of the evening are changed', () => {
+    const fresh = league([stat('Anna', { points: 4 }), stat('Ben', { points: 2 }), stat('Dora', { points: 9 })]);
+    const updated = applySessionToLeague(fresh, [stat('Anna', { wins: 1, points: 2 }), stat('Ben', { losses: 1 })], 'Anna', undefined, new Map());
+    expect(changedRows(fresh, updated).map(r => r.player.name).sort()).toEqual(['Anna', 'Ben']);
   });
 });

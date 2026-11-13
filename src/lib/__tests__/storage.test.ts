@@ -79,7 +79,10 @@ import {
   loadCurrentSession,
   loadLeagues,
   saveCurrentSession,
-  saveLeague,
+  loadLeague,
+  saveLeagueHeader,
+  saveLeagueRows,
+  deleteLeagueRow,
   saveToHistory,
 } from '@/lib/storage';
 import { League, PlayerStats, TrainingSession } from '@/types';
@@ -232,31 +235,71 @@ describe('saving leagues', () => {
     state.ops = [];
   };
 
-  it('updates stats in place, adds new players and removes dropped ones', async () => {
+  it('saveLeagueRows writes only the given rows; other rows stay as they are and nothing is deleted', async () => {
     seedLeagues();
-    await saveLeague(league([stat('p1', 6), stat('p3', 1)]));
+    // another device changed p2 in the meantime; this device only knows (and writes) p1 and the new p3
+    state.db.player_stats.find(r => r.id === 'r2')!.points = 77;
+    await saveLeagueRows(league([stat('p1', 6), stat('p2', 2)]), [stat('p1', 6), stat('p3', 1)]);
 
     const rows = state.db.player_stats.filter(r => r.league_id === 'L1');
-    expect(rows.map(r => r.player_id).sort()).toEqual(['p1', 'p3']);
-    expect(rows.find(r => r.player_id === 'p1')).toMatchObject({ id: 'r1', points: 6 });
+    expect(rows.map(r => r.player_id).sort()).toEqual(['p1', 'p2', 'p3']);
+    expect(rows.find(r => r.player_id === 'p2')?.points).toBe(77); // untouched
+    expect(rows.find(r => r.player_id === 'p1')?.points).toBe(6);
+    expect(state.ops.some(o => o.startsWith('delete:'))).toBe(false);
+  });
+
+  it('keeps the id of an existing row', async () => {
+    seedLeagues();
+    await saveLeagueRows(league([]), [stat('p1', 6)]);
+    expect(state.db.player_stats.filter(r => r.league_id === 'L1' && r.player_id === 'p1')).toHaveLength(1);
+    expect(state.db.player_stats.find(r => r.league_id === 'L1' && r.player_id === 'p1')?.id).toBe('r1');
+  });
+
+  it('writes nothing for an empty list of rows', async () => {
+    seedLeagues();
+    await saveLeagueRows(league([]), []);
+    expect(state.ops).toEqual([]);
   });
 
   it('never touches other leagues', async () => {
     seedLeagues();
-    await saveLeague(league([stat('p1', 6)]));
+    await saveLeagueRows(league([]), [stat('p1', 6)]);
     expect(state.db.leagues.map(l => l.id).sort()).toEqual(['L1', 'L2']);
     expect(state.db.player_stats.find(r => r.id === 'r3')?.points).toBe(9);
-    expect(state.ops.some(o => o.startsWith('delete:leagues'))).toBe(false);
   });
 
-  it('keeps every row when writing the stats fails', async () => {
+  it('keeps every row when writing fails', async () => {
     seedLeagues();
     state.failOn = (mode, table) => mode === 'upsert' && table === 'player_stats';
-    await expect(saveLeague(league([stat('p1', 6)]))).rejects.toBeTruthy();
+    await expect(saveLeagueRows(league([]), [stat('p1', 6)])).rejects.toBeTruthy();
 
     expect(state.ops.some(o => o.startsWith('delete:'))).toBe(false);
     expect(state.db.player_stats.map(r => r.id).sort()).toEqual(['r1', 'r2', 'r3']);
     expect(state.db.player_stats.find(r => r.id === 'r1')?.points).toBe(4);
+  });
+
+  it('deleteLeagueRow deletes exactly one row of that league, not the same player in another league', async () => {
+    seedLeagues();
+    await deleteLeagueRow('L1', 'p1');
+    expect(state.db.player_stats.map(r => r.id).sort()).toEqual(['r2', 'r3']);
+    state.failOn = () => true;
+    await expect(deleteLeagueRow('L2', 'p1')).rejects.toBeTruthy();
+  });
+
+  it('saveLeagueHeader writes the league itself and no rows', async () => {
+    seedLeagues();
+    await saveLeagueHeader({ ...league([stat('p9', 1)]), name: 'Neuer Name' });
+    expect(state.db.leagues.find(l => l.id === 'L1')?.name).toBe('Neuer Name');
+    expect(state.db.player_stats.map(r => r.id).sort()).toEqual(['r1', 'r2', 'r3']);
+  });
+
+  it('loadLeague returns one league with its rows sorted like loadLeagues, and null for an unknown id', async () => {
+    seedLeagues();
+    const one = await loadLeague('L1');
+    const all = await loadLeagues();
+    expect(one).toEqual(all.find(l => l.id === 'L1'));
+    expect(one?.playerStats.map(s => s.player.id)).toEqual(['p1', 'p2']); // by points
+    expect(await loadLeague('nope')).toBeNull();
   });
 
   it('deleteLeague removes exactly one league and reports errors', async () => {

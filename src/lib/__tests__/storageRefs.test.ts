@@ -234,7 +234,7 @@ describe('writing the fixed identity', () => {
     seed(false);
     const storage = await freshStorage();
     const [league] = await storage.loadLeagues();
-    await storage.saveLeague({ ...league, playerStats: [{ ...league.playerStats[0], player: { id: 'p1', name: 'Erik Schwarz', ref: 'R-erik' } }] });
+    await storage.saveLeagueRows(league, [{ ...league.playerStats[0], player: { id: 'p1', name: 'Erik Schwarz', ref: 'R-erik' } }]);
     expect(state.db.player_stats.some(r => 'player_ref' in r)).toBe(false);
   });
 
@@ -247,7 +247,7 @@ describe('writing the fixed identity', () => {
       { ...league.playerStats[0], player: { id: 'p9', name: 'Neu', ref: 'R-neu' } },
       { ...league.playerStats[0], player: { id: 'p8', name: 'Ohne' } },
     ];
-    await storage.saveLeague({ ...league, playerStats: rows });
+    await storage.saveLeagueRows(league, rows);
     const byName = (n: string) => state.db.player_stats.find(r => r.player_name === n)!;
     expect(byName('Erik Schwarz').player_ref).toBe('R-erik');
     expect(byName('Neu').player_ref).toBe('R-neu');

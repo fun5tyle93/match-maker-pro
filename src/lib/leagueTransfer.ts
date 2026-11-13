@@ -95,3 +95,22 @@ export function applySessionToLeague(
   updatedStats.sort(league.isEternal ? compareEternalRows : compareLeagueRows);
   return { ...league, playerStats: updatedStats };
 }
+
+const STAT_FIELDS = [
+  'wins', 'draws', 'losses', 'goalsFor', 'goalsAgainst', 'points', 'pointsAgainst', 'goalDifference',
+  'championships', 'viceChampionships',
+] as const;
+
+/**
+ * Rows of `after` that are new or differ from `before`: any of the ten numbers, the name or the identity.
+ * Only these rows are written to the database, so rows that another device changed in the meantime stay untouched.
+ */
+export function changedRows(before: League, after: League): PlayerStats[] {
+  const old = new Map(before.playerStats.map(s => [s.player.id, s]));
+  return after.playerStats.filter(row => {
+    const prev = old.get(row.player.id);
+    if (!prev) return true;
+    if (prev.player.name !== row.player.name || prev.player.ref !== row.player.ref) return true;
+    return STAT_FIELDS.some(f => (prev[f] ?? 0) !== (row[f] ?? 0));
+  });
+}
