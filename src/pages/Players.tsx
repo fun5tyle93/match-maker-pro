@@ -38,6 +38,8 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 /** The numbers of a league row in one short line. */
 const statLine = (s: StatNumbers) =>
   `${s.wins}-${s.draws}-${s.losses} S-U-N · Tore ${s.goals_for}:${s.goals_against} · ${s.points} Pkt · ${s.championships} M · ${s.vice_championships} V`;
+/** Shown after merging or assigning: the league check tells whether the stored numbers still add up. */
+const CHECK_HINT = 'Bitte in den betroffenen Ligen die Prüfung „berechnet = gespeichert“ ansehen.';
 
 /** Administration of the list of known players (admin only): rename, merge, delete, give league rows a player. */
 const Players = () => {
@@ -87,11 +89,11 @@ const Players = () => {
   const byId = useMemo(() => new Map((data?.players ?? []).map(p => [p.id, p])), [data]);
 
   /** Runs one action: busy while it runs, a message in German for success or failure, the lists are read again. */
-  const perform = async (action: PlayerAdminAction, task: () => Promise<void>, success: string): Promise<boolean> => {
+  const perform = async (action: PlayerAdminAction, task: () => Promise<void>, success: string, hint?: string): Promise<boolean> => {
     setBusy(true);
     try {
       await task();
-      toast.success(success);
+      toast.success(success, hint ? { description: hint } : undefined);
       load();
       reloadRegistry();
       return true;
@@ -305,7 +307,17 @@ const Players = () => {
                   })}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">Das lässt sich nicht automatisch rückgängig machen. Die Zahlen bitte danach kurz prüfen.</p>
+              {mergeScope === 'some' && (
+                <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive" data-testid="merge-partial-warning">
+                  Achtung: „{merging?.displayName}“ bleibt als eigener Spieler bestehen. Abende, die künftig mit „{merging?.displayName}“
+                  übertragen werden, legen in den gewählten Ligen wieder eine eigene Zeile an. Ist es dieselbe Person, besser
+                  „Überall – ganz zusammenführen“ wählen.
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground" data-testid="merge-check-hint">
+                Das lässt sich nicht automatisch rückgängig machen. Bitte danach in den betroffenen Ligen die Prüfung
+                „berechnet = gespeichert“ ansehen und bei Bedarf „Als neuen Stand übernehmen“.
+              </p>
               <button type="button" className="text-xs underline text-muted-foreground" onClick={() => setMergeInto(null)}>Anderen Spieler wählen</button>
             </div>
           )}
@@ -315,7 +327,7 @@ const Players = () => {
               variant="destructive"
               disabled={busy || !mergeReady}
               onClick={async () => {
-                if (merging && mergeInto && await perform('merge', () => mergePlayers(merging.id, mergeInto.ref, mergeScope === 'all' ? undefined : mergeLeagues), `„${merging.displayName}“ ist jetzt „${mergeInto.name}“${mergeScope === 'all' ? '' : ` (in ${plural(mergeLeagues.length, 'Liga', 'Ligen')})`}`)) {
+                if (merging && mergeInto && await perform('merge', () => mergePlayers(merging.id, mergeInto.ref, mergeScope === 'all' ? undefined : mergeLeagues), `„${merging.displayName}“ ist jetzt „${mergeInto.name}“${mergeScope === 'all' ? '' : ` (in ${plural(mergeLeagues.length, 'Liga', 'Ligen')})`}`, CHECK_HINT)) {
                   closeMerge();
                 }
               }}
@@ -359,7 +371,7 @@ const Players = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Abbrechen</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => assigning && void perform('assign', () => assignLeagueRow(assigning.row.id, assigning.player.ref, assigning.player.name), 'Zeile zugeordnet')}
+              onClick={() => assigning && void perform('assign', () => assignLeagueRow(assigning.row.id, assigning.player.ref, assigning.player.name), 'Zeile zugeordnet', CHECK_HINT)}
             >
               Zuordnen
             </AlertDialogAction>
