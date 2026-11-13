@@ -11,6 +11,9 @@
 #    in supabase/migrations/, wird sie in Schritt 3 übersprungen und erst hier, nach den Daten, angewendet
 # Danach: psql -h /var/tmp/mm-pg -p 54329 -U postgres   (Server stoppen: scripts/db-rehearsal.sh --stop)
 #
+# Sicherungen von VOR dem 13.11.2026 enthalten noch die doppelten Spielerzeilen (Migration 20261113110000). Sie lassen sich nur laden,
+# wenn diese Migration als zusätzliches Argument übergeben wird (dann greift sie erst nach dem Laden). Neuere Sicherungen sind davon nicht betroffen.
+#
 # Berührt NICHT die Live-Datenbank. Bricht beim ersten Fehler ab.
 set -euo pipefail
 PG=/usr/lib/postgresql/16/bin
@@ -51,7 +54,9 @@ done
 
 # Backup laden (Reihenfolge wegen Fremdschlüsseln)
 as_pg "$PSQL -c 'DELETE FROM public.current_session'"
-for t in leagues training_sessions player_stats training_players matches current_session; do
+# Tabellen, auf die andere verweisen, zuerst (Fremdschlüssel). Fehlt eine Datei (ältere Sicherung ohne Spielerliste), wird sie übersprungen.
+for t in leagues training_sessions players player_aliases player_stats training_players matches league_opening_balances current_session; do
+  [ -f "$DATA/$t.json" ] || { echo "Übersprungen (keine Datei): $t"; continue; }
   cp "$DATA/$t.json" "$DIR/$t.json"; chmod a+r "$DIR/$t.json"
   as_pg "$PSQL -c \"INSERT INTO public.$t SELECT * FROM json_populate_recordset(NULL::public.$t, pg_read_file('$DIR/$t.json')::json)\""
   echo "Geladen: $t $(as_pg "psql -h $DIR -p $PORT -U postgres -tAc 'SELECT count(*) FROM public.$t'")"
