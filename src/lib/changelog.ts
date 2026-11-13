@@ -23,7 +23,7 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '3.5.0', date: '2026-11-13', kind: 'minor', prs: [],
+    version: '3.5.0', date: '2026-11-13', kind: 'minor', prs: [41],
     title: 'Dokumentation und Changelog',
     changes: [
       'Die Dokumentationsseite beschreibt alle neuen Funktionen und hat keine veralteten Texte mehr.',
