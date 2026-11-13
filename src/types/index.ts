@@ -65,6 +65,8 @@ export interface TrainingSession {
   rankingRule?: 'legacy' | 'dtkv2026';
   /** Ergebnisse von Entscheidungsspielen/-runden bei völligem Gleichstand um Platz 1 oder 2 */
   deciderResults?: { players: string[]; order: string[] }[];
+  /** Swiss tournaments: the drawn lot for a complete tie in the group phase (read from swiss_state, never written from here) */
+  swissLot?: Record<string, number>;
 }
 
 export interface League {

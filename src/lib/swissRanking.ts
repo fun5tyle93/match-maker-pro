@@ -5,7 +5,7 @@ import { computeSwissStats } from './swissPairing';
 import { getSwissMatches, getPlayoffFlatMatches } from './tournamentPhases';
 
 /** The rounds of a Swiss tournament rebuilt from the flat list of saved matches. */
-function roundsOf(matches: Match[]): SwissRound[] {
+export function roundsOf(matches: Match[]): SwissRound[] {
   const numbers = [...new Set(matches.map(m => m.round))].sort((a, b) => a - b);
   return numbers.map(n => ({
     roundNumber: n,

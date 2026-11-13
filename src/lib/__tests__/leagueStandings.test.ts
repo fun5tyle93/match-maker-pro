@@ -47,8 +47,24 @@ describe('sessionResult', () => {
     expect(by(booked, 'Ben').championships).toBe(1);
   });
 
-  it('refuses a Swiss tournament until its contribution is implemented', () => {
-    expect(() => sessionResult(evening('s', '2026-03-01T18:00:00Z', { tournamentType: 'swiss' }))).toThrow(/noch nicht umgesetzt/);
+  it('books a Swiss tournament with the numbers and titles of its final result', () => {
+    // A wins all three games (3-0-0, goals 7:1), C and B are level on points, D loses all; no playoff
+    const group = (id: string, round: number, home: string, away: string, hs: number, as: number) => ({
+      id, round, phase: 'swiss' as const, homePlayer: { id: home, name: `Spieler ${home}` }, awayPlayer: { id: away, name: `Spieler ${away}` },
+      homeScore: hs, awayScore: as, isCompleted: true,
+    });
+    const swiss = evening('s', '2026-03-01T18:00:00Z', {
+      tournamentType: 'swiss',
+      players: ['A', 'B', 'C', 'D'].map(id => ({ id, name: `Spieler ${id}` })),
+      matches: [
+        group('g1', 1, 'A', 'B', 3, 0), group('g2', 1, 'C', 'D', 1, 0), group('g3', 2, 'A', 'C', 2, 0),
+        group('g4', 2, 'B', 'D', 1, 0), group('g5', 3, 'A', 'D', 2, 1), group('g6', 3, 'B', 'C', 0, 0),
+      ],
+    });
+    const result = sessionResult(swiss);
+    expect(result.stats.map(r => [r.player.id, r.wins, r.draws, r.losses, r.goalsFor, r.goalsAgainst, r.points, r.pointsAgainst, r.goalDifference].join(',')))
+      .toEqual(['A,3,0,0,7,1,6,0,6', 'C,1,1,1,1,2,3,3,-1', 'B,1,1,1,1,3,3,3,-2', 'D,0,0,3,1,4,0,6,-3']);
+    expect([result.firstPlace, result.secondPlace]).toEqual(['Spieler A', 'Spieler C']);
   });
 });
 

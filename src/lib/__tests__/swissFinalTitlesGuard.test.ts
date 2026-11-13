@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('@/integrations/supabase/client', () => ({ supabase: {} }));
 // The final ranking is replaced by a deliberately wrong order, to show where the titles do NOT come from
-vi.mock('@/lib/swissRanking', async importOriginal => {
-  const original = await importOriginal<typeof import('@/lib/swissRanking')>();
+vi.mock('@/lib/ranking', async importOriginal => {
+  const original = await importOriginal<typeof import('@/lib/ranking')>();
   const wrong = ['D', 'B', 'A', 'C'].map((id, i) => ({ place: i + 1, player: { id, name: `Spieler ${id}` }, outIn: 'swiss', points: 0, playoffPoints: 0, goalDifference: 0 }));
-  return { ...original, sessionFinalRanking: () => wrong };
+  return { ...original, finalRankingSwiss: () => wrong };
 });
 import { computeFinalSwissStats } from '@/pages/swissHelpers';
 import * as f from './swissFixtures';
