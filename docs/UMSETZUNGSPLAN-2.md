@@ -22,7 +22,8 @@ Die Regeln aus `docs/UMSETZUNGSPLAN.md`, Abschnitte 1 und 2, gelten unverändert
 
 - **Ein Punkt = ein Branch = ein PR.** PR nur per REST anlegen (GraphQL ist blockiert):
   `gh api repos/<owner>/<repo>/pulls -f title=... -f head=<branch> -f base=main -F body=@<datei>`
-- **Mergen nur nach „mergen“ des Nutzers:**
+- **Changelog (Vorgabe des Nutzers, gilt für jede künftige Änderung):** Vor dem PR den Changelog in `src/lib/changelog.ts` füllen (neuer Eintrag oben: Version nach Schwere major/minor/patch, Datum, Titel, kurze Punkte, PR-Nummer; der Test `changelog.test.ts` prüft die Versionsfolge). Danach PR anlegen, mergen und mit dem nächsten Punkt weitermachen.
+- **Mergen:** Der Nutzer hat am 13.11.2026 vorgegeben: nach grünen Prüfungen (CI, Vorschau) PR anlegen, mergen und weitermachen. **Ausnahme:** Datenbankänderungen (Migration, Datenkorrektur) laufen live weiterhin nur nach ausdrücklicher Freigabe. Merge-Befehl:
   `gh api repos/<owner>/<repo>/pulls/<N>/merge -X PUT -f merge_method=merge -f commit_title="<Titel> (#<N>)"`
 - **Branches löschen geht nicht** (Proxy). Nenne dem Nutzer am Ende die gemergten Branches.
 - **Sprache:** mit dem Nutzer und in UI-Texten Deutsch; Code-Kommentare und Commit-Nachrichten Englisch.

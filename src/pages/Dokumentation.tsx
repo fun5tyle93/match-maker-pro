@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { CHANGELOG, CURRENT_VERSION, ChangeKind } from '@/lib/changelog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MatchCard } from '@/components/MatchCard';
 import { StandingsTable } from '@/components/StandingsTable';
@@ -12,6 +15,7 @@ import {
   History, Shield, Search, BookOpen, RefreshCw, ArrowRightLeft,
   Table, Star, Settings, Lock, Globe, AlertCircle, CheckCircle2,
   ClockIcon, Monitor, Tablet, Smartphone, Play,
+  Network, UserPlus, ClipboardCheck, Medal, UserCog, DatabaseBackup, ScrollText,
 } from 'lucide-react';
 import type { Match, PlayerStats, Player } from '@/types';
 import { cn } from '@/lib/utils';
@@ -198,18 +202,21 @@ const sections: DocSection[] = [
   {
     label: 'Kernfunktionen',
     features: [
-      { icon: Calendar,        title: 'Trainingsabende',        description: 'Verwalte Trainingsabende mit Spielerdaten, automatischer Paarungsgenerierung und Live-Ergebniseingabe. Ergebnisse können per Klick oder Enter-Taste bestätigt werden.', status: 'Aktiv' },
+      { icon: Calendar,        title: 'Trainingsabende',        description: 'Verwalte Trainingsabende mit Spielerdaten, automatischer Paarungsgenerierung und Live-Ergebniseingabe. Ergebnisse können per Klick oder Enter-Taste bestätigt werden. Der Abend wird laufend in der Datenbank gespeichert; bei Verbindungsproblemen bleiben Eingaben im Browser gesichert.', status: 'Aktiv' },
       { icon: Shuffle,         title: 'Paarungsgenerator',      description: 'Generiert automatisch faire Paarungen für alle angemeldeten Spieler eines Trainingsabends nach dem Round-Robin-Prinzip.', status: 'Aktiv' },
-      { icon: BarChart2,       title: 'Tagestabelle',           description: 'Zeigt die aktuelle Tagesrangliste eines Trainingsabends und aktualisiert sich nach jedem eingetragenen Ergebnis – inklusive Tore, Punkte und Differenz.', status: 'Aktiv' },
+      { icon: BarChart2,       title: 'Tagestabelle',           description: 'Zeigt die Rangliste des Abends nach der DTKV-Spielordnung 2026: Punkte, dann direkter Vergleich bzw. Untergruppe, dann Tore. Bei völligem Gleichstand um Platz 1 oder 2 fragt die App nach dem Ergebnis eines Entscheidungsspiels.', status: 'Neu' },
+      { icon: Network,         title: 'Schweizer System',       description: 'Turnier mit Vorrunde ohne Wiederholungspaarung, Freilos bei ungerader Spielerzahl, optional Schiedsrichter-Modus (der Spieler mit Freilos pfeift im anderen Durchgang) und Playoff ohne Unentschieden (Sudden Death). Der Turnierstand wird in der Datenbank gespeichert.', status: 'Neu' },
+      { icon: UserPlus,        title: 'Spielereingabe mit Spielerliste', description: 'Beim Tippen schlägt die App bekannte Spieler vor. Ein unbekannter Name wird erst nach Rückfrage angelegt, mit Hinweis auf ähnliche Namen.', status: 'Neu' },
       { icon: RefreshCw,       title: 'Training zurücksetzen',  description: 'Ermöglicht das Zurücksetzen eines laufenden Trainingsabends, um Spieler neu einzutragen oder Paarungen neu zu generieren.', status: 'Aktiv' },
     ],
   },
   {
     label: 'Ligen & Tabellen',
     features: [
-      { icon: Trophy,          title: 'Ligenverwaltung',         description: 'Erstelle und verwalte Meisterschaften (Saisons). Zeigt die vollständige Ligatabelle mit Siegen, Niederlagen, Toren und Punkten.', status: 'Aktiv' },
-      { icon: ArrowRightLeft,  title: 'Transfer zur Ewigen Tabelle', description: 'Überträgt die Ergebnisse eines abgeschlossenen Trainingsabends direkt in die ewige Tabelle und aggregiert Statistiken korrekt.', status: 'Aktiv' },
-      { icon: Table,           title: 'Ewige Tabelle',           description: 'Die allzeitige Gesamtrangliste aller Spieler: Punkte, Siege, Niederlagen, Tordifferenz und Punkte gegen (Pkt−) über alle Saisons.', status: 'Aktiv' },
+      { icon: Trophy,          title: 'Ligenverwaltung',         description: 'Erstelle und verwalte Meisterschaften (Saisons). Zeigt die vollständige Ligatabelle mit Siegen, Niederlagen, Toren und Punkten. Spieler werden über die Spielerliste hinzugefügt.', status: 'Aktiv' },
+      { icon: ArrowRightLeft,  title: 'Übertragung in Ligen',    description: 'Überträgt die Ergebnisse eines Abends oder Turniers in eine oder mehrere Ligen. Dieselbe Person wird an ihrer festen Identität erkannt; bei ähnlichen Namen ohne Identität fragt die App nach. Spieler „außer Konkurrenz“ (Name endet auf „a.K.“) bekommen keinen Titel, der Nächste rückt nach.', status: 'Neu' },
+      { icon: Table,           title: 'Ewige Tabelle',           description: 'Die allzeitige Rangliste: Punkte, Gegenpunkte und Meistertitel, sortiert nach Punkten, dann Meistertiteln.', status: 'Aktiv' },
+      { icon: ClipboardCheck,  title: 'Prüfung „berechnet = gespeichert“', description: 'Admins können je Liga nachrechnen lassen, ob die gespeicherte Tabelle zu Startbestand und übertragenen Abenden passt. Abweichungen werden mit Spieler und Spalte angezeigt.', status: 'Neu' },
       { icon: Star,            title: 'Meisterschafts-Highlights', description: 'Zeigt Meister und Vize-Meister jeder Saison gesondert an und hebt besondere Leistungen hervor.', status: 'In Planung' },
     ],
   },
@@ -217,7 +224,8 @@ const sections: DocSection[] = [
     label: 'Historie & Auswertung',
     features: [
       { icon: History,         title: 'Historienansicht',  description: 'Bietet einen Überblick über alle vergangenen Trainingsabende und Meisterschaften mit den jeweiligen Endständen.', status: 'Aktiv' },
-      { icon: BarChart2,       title: 'Statistiken',       description: 'Eigener Bereich mit Auswertungen aus allen abgeschlossenen Trainings: Abende, Spiele, Siegquote, ∅ Punkte, Tordifferenz, gewonnene Abende, Form der letzten fünf Spiele und Direktvergleich zweier Spieler – für alle Jahre oder einzeln.', status: 'Aktiv' },
+      { icon: BarChart2,       title: 'Statistiken',       description: 'Eigener Bereich mit Auswertungen aus allen abgeschlossenen Trainings: Abende, Spiele, Siegquote, ∅ Punkte, Tordifferenz, gewonnene Abende, Form der letzten fünf Spiele und Direktvergleich zweier Spieler – für alle Jahre oder einzeln. Dieselbe Person wird über alle Schreibweisen hinweg gezählt.', status: 'Aktiv' },
+      { icon: Medal,           title: 'Abschlussrangliste Schweizer System', description: 'Nach SO § 9 Abs. 6: nach Ausscheiderunde, dann Punkten; Sudden-Death-Spiele zählen 1,5 zu 0,5.', status: 'Neu' },
       { icon: FileDown,        title: 'PDF-Export',        description: 'Exportiert die aktuelle Tabelle oder den Spielplan als sauber formatiertes PDF, inklusive TKC71-Branding.', status: 'Aktiv' },
       { icon: Globe,           title: 'Excel / CSV-Export', description: 'Ermöglicht den Export von Statistiken und Tabellendaten im Excel-Format für externe Auswertungen.', status: 'Aktiv' },
     ],
@@ -227,7 +235,8 @@ const sections: DocSection[] = [
     features: [
       { icon: Lock,    title: 'Admin-Login',              description: 'Zugang zu administrativen Funktionen über sicheres Supabase-Auth.', status: 'Aktiv' },
       { icon: Shield,  title: 'Row Level Security (RLS)', description: 'Alle Schreiboperationen sind serverseitig durch RLS-Policies geschützt – nur authentifizierte Nutzer dürfen Daten verändern.', status: 'Aktiv' },
-      { icon: Users,   title: 'Spielerverwaltung',        description: 'Spieler können pro Trainingsabend hinzugefügt oder entfernt werden. Ihre Statistiken werden separat pro Session gespeichert.', status: 'Aktiv' },
+      { icon: UserCog, title: 'Spielerverwaltung',        description: 'Admins pflegen die Spielerliste: umbenennen (der alte Name bleibt als anderer Name erhalten), doppelt angelegte Spieler ganz oder nur in einzelnen Ligen zusammenführen (die Zahlen werden addiert), ungenutzte löschen und Liga-Zeilen ohne Spieler zuordnen.', status: 'Neu' },
+      { icon: DatabaseBackup, title: 'Datensicherung',    description: 'Alle Tabellen werden am 1. und 15. jedes Monats gesichert; eine Wiederherstellung prüft die Sicherung vorher (Probelauf) und löscht nie etwas.', status: 'Neu' },
       { icon: Settings, title: 'Rollen & Berechtigungen', description: 'Differenzierte Rollenvergabe (Admin / User) mit serverseitig erzwungenen Berechtigungen für sensible Aktionen.', status: 'In Planung' },
     ],
   },
@@ -239,6 +248,52 @@ const sections: DocSection[] = [
     ],
   },
 ];
+
+const kindLabel: Record<ChangeKind, string> = { major: 'Major', minor: 'Minor', patch: 'Patch', start: 'Start' };
+const kindClass: Record<ChangeKind, string> = {
+  major: 'bg-destructive/10 text-destructive border-destructive/30',
+  minor: 'bg-accent/30 text-accent-foreground border-accent/40',
+  patch: 'bg-muted text-muted-foreground border-border',
+  start: 'bg-muted text-muted-foreground border-border',
+};
+const formatDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+/** Clickable changelog: version, date, short description, newest first. */
+function Changelog() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="secondary" size="sm" className="mt-4">
+          <ScrollText className="w-4 h-4 mr-2" />Changelog · v{CURRENT_VERSION}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl" data-testid="changelog">
+        <DialogHeader>
+          <DialogTitle>Changelog</DialogTitle>
+          <DialogDescription>Was sich Schritt für Schritt geändert hat. Aktuelle Version: {CURRENT_VERSION}</DialogDescription>
+        </DialogHeader>
+        <ol className="space-y-5">
+          {CHANGELOG.map((entry) => (
+            <li key={entry.version} className="border-l-2 border-border pl-4" data-testid="changelog-entry">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-sm font-bold text-foreground">v{entry.version}</span>
+                <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold', kindClass[entry.kind])}>{kindLabel[entry.kind]}</span>
+                <span className="text-xs text-muted-foreground">{formatDate(entry.date)}</span>
+              </div>
+              <p className="mt-1 text-sm font-medium text-foreground">{entry.title}</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-muted-foreground leading-relaxed">
+                {entry.changes.map((c) => <li key={c}>{c}</li>)}
+              </ul>
+              {entry.prs.length > 0 && (
+                <p className="mt-1 text-[10px] text-muted-foreground">PR {entry.prs.map((n) => `#${n}`).join(', ')}</p>
+              )}
+            </li>
+          ))}
+        </ol>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 /* ─────────────── Main page ─────────────── */
 export default function Dokumentation() {
@@ -252,7 +307,7 @@ export default function Dokumentation() {
     : sections;
 
   const allFeatures = sections.flatMap((s) => s.features);
-  const activeCount = allFeatures.filter((f) => f.status === 'Aktiv').length;
+  const activeCount = allFeatures.filter((f) => f.status !== 'In Planung').length; // "Neu" is active too
   const planningCount = allFeatures.filter((f) => f.status === 'In Planung').length;
 
   return (
@@ -269,6 +324,7 @@ export default function Dokumentation() {
           <p className="text-primary-foreground/80 text-base max-w-2xl">
             Übersicht aller Funktionen und interaktive Live-Previews des TKC71 Meisterschaftstools.
           </p>
+          <Changelog />
         </div>
       </div>
 
