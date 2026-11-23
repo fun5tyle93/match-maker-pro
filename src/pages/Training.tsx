@@ -144,7 +144,8 @@ const Training = () => {
   };
 
   const handleUpdateScore = (matchId: string, homeScore: number, awayScore: number) => {
-    if (!session) return;
+    // Only admins enter results; guests see the evening read-only (and could never save it: the database refuses them)
+    if (!session || !isAdmin) return;
 
     const updatedMatches = session.matches.map(m =>
       m.id === matchId
@@ -493,6 +494,7 @@ const Training = () => {
                             key={match.id}
                             match={match}
                             onUpdateScore={handleUpdateScore}
+                            readonly={!isAdmin}
                             tableNumber={match.tableNumber ?? index + 1}
                           />
                         ))}
