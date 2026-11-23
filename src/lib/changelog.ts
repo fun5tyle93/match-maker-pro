@@ -23,7 +23,7 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '3.5.2', date: '2026-11-23', kind: 'patch', prs: [],
+    version: '3.5.2', date: '2026-11-23', kind: 'patch', prs: [44],
     title: 'Laufender Abend für Gäste nur lesbar',
     changes: [
       'Nicht angemeldete Besucher sehen den laufenden Trainingsabend nur noch an; Ergebnisfelder und „Bearbeiten“ gibt es nur für Admins.',
